@@ -2,21 +2,35 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
 export default function Login() {
+  const [mode, setMode] = useState('signin') // 'signin' | 'signup'
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
 
   async function submit(e) {
     e.preventDefault()
-    setLoading(true); setError('')
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    })
-    setLoading(false)
-    if (error) setError(error.message)
-    else setSent(true)
+    setLoading(true); setError(''); setInfo('')
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { display_name: name.trim() || email.split('@')[0] } },
+        })
+        if (error) throw error
+        // If email confirmation is OFF, a session is returned and we're in immediately.
+        if (!data.session) setInfo('Account created. If sign-in doesn\'t happen automatically, switch to "Sign in".')
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        if (error) throw error
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -29,27 +43,47 @@ export default function Login() {
         </div>
 
         <div className="card p-6">
-          {sent ? (
-            <div className="text-center py-4">
-              <div className="h-12 w-12 mx-auto rounded-full bg-accent-soft text-accent flex items-center justify-center mb-3">✓</div>
-              <h2 className="font-display text-lg">Check your inbox</h2>
-              <p className="text-sm text-muted mt-1">
-                We sent a magic link to <span className="font-medium text-ink">{email}</span>. Click it to sign in.
-              </p>
-              <button onClick={() => setSent(false)} className="btn btn-soft mt-5 w-full">Use a different email</button>
-            </div>
-          ) : (
-            <form onSubmit={submit}>
+          {/* Tabs */}
+          <div className="flex gap-2 mb-5 p-1 bg-canvas rounded-xl border border-line">
+            <button onClick={() => { setMode('signin'); setError(''); setInfo('') }}
+              className={`flex-1 h-9 rounded-lg text-sm font-medium transition-colors ${mode === 'signin' ? 'bg-surface shadow-sm text-ink' : 'text-muted'}`}>Sign in</button>
+            <button onClick={() => { setMode('signup'); setError(''); setInfo('') }}
+              className={`flex-1 h-9 rounded-lg text-sm font-medium transition-colors ${mode === 'signup' ? 'bg-surface shadow-sm text-ink' : 'text-muted'}`}>Create account</button>
+          </div>
+
+          <form onSubmit={submit} className="space-y-3">
+            {mode === 'signup' && (
+              <div>
+                <label className="label">Your name</label>
+                <input className="input" placeholder="e.g. Aman" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+            )}
+            <div>
               <label className="label">Email</label>
-              <input className="input" type="email" required autoFocus placeholder="you@email.com"
+              <input className="input" type="email" required autoComplete="email" placeholder="you@email.com"
                 value={email} onChange={(e) => setEmail(e.target.value)} />
-              {error && <p className="text-sm text-accent mt-2">{error}</p>}
-              <button className="btn btn-primary w-full mt-4" disabled={loading}>
-                {loading ? 'Sending…' : 'Send magic link'}
-              </button>
-              <p className="text-xs text-faint text-center mt-3">No password needed — we email you a sign-in link.</p>
-            </form>
-          )}
+            </div>
+            <div>
+              <label className="label">Password</label>
+              <input className="input" type="password" required minLength={6}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                value={password} onChange={(e) => setPassword(e.target.value)} />
+            </div>
+
+            {error && <p className="text-sm text-accent">{error}</p>}
+            {info && <p className="text-sm text-muted">{info}</p>}
+
+            <button className="btn btn-primary w-full" disabled={loading}>
+              {loading ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+            </button>
+          </form>
+
+          <p className="text-xs text-faint text-center mt-4">
+            {mode === 'signin'
+              ? 'First time? Switch to "Create account".'
+              : 'Already set up? Switch to "Sign in".'}
+          </p>
         </div>
       </div>
     </div>
