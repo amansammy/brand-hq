@@ -148,7 +148,8 @@ export default function Tasks() {
         </div>
         <form onSubmit={addMilestone} className="flex flex-col sm:flex-row gap-2">
           <input className="input sm:flex-1 min-w-0" placeholder="Milestone (e.g. Launch drop 01)" value={msTitle} onChange={(e) => setMsTitle(e.target.value)} />
-          <input className="input w-full sm:w-44 min-w-0" type="date" min={todayISO()} value={msDate} onChange={(e) => setMsDate(e.target.value)} />
+          <input className="input w-full sm:w-44 min-w-0" type="date" min={todayISO()} value={msDate}
+            onChange={(e) => { const v = e.target.value; setMsDate(v && v < todayISO() ? todayISO() : v) }} />
           <button className="btn btn-soft shrink-0" disabled={!msTitle.trim()}><Icon name="plus" size={16} /> Add</button>
         </form>
       </div>
@@ -341,17 +342,18 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
         <div><label className="label">Notes</label>
           <textarea className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details…" /></div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="label">Assignee</label>
             <select className="input" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
               <option value="">Unassigned</option>
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
             </select></div>
-          <div><label className="label">Due date</label>
-            <input className="input min-w-0" type="date" min={todayISO()} value={dueDate || ''} onChange={(e) => setDueDate(e.target.value)} /></div>
+          <div className="min-w-0"><label className="label">Due date</label>
+            <input className="input min-w-0" type="date" min={todayISO()} value={dueDate || ''}
+              onChange={(e) => { const v = e.target.value; setDueDate(v && v < todayISO() ? todayISO() : v) }} /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="label">Priority</label>
             <div className="flex gap-1.5">
               {Object.entries(PRIORITY).map(([k, v]) => (

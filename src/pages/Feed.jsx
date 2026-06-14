@@ -212,10 +212,12 @@ function SwipeToDelete({ onDelete, children }) {
 
   return (
     <div className="relative overflow-hidden rounded-2xl">
-      <button onClick={onDelete}
-        className="absolute inset-y-0 right-0 flex items-center gap-1.5 px-5 bg-red-600 text-white text-sm font-medium">
-        <Icon name="trash" size={16} /> Delete
-      </button>
+      {dx < 0 && (
+        <button onClick={onDelete}
+          className="absolute inset-y-0 right-0 flex items-center gap-1.5 px-5 bg-red-600 text-white text-sm font-medium">
+          <Icon name="trash" size={16} /> Delete
+        </button>
+      )}
       <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
         style={{ transform: `translateX(${dx}px)`, transition: dragging ? 'none' : 'transform .22s ease' }}>
         {children}
