@@ -109,8 +109,12 @@ function AddModal({ user, onClose, onDone }) {
   async function addUnsplash(photo) {
     setBusy(true); setErr('')
     try {
+      // Unsplash API guideline: register a "download" when a photo is used.
+      try { if (photo.links?.download_location) fetch(`${photo.links.download_location}&client_id=${UNSPLASH_KEY}`) } catch (e) {}
+      const credit = `Photo by ${photo.user?.name || 'Unsplash'} on Unsplash`
       const { data } = await supabase.from('moodboard_items').insert({
-        type: 'image', url: photo.urls.regular, caption: caption.trim() || `Photo: ${photo.user?.name} / Unsplash`, created_by: user.id,
+        type: 'image', url: photo.urls.regular, title: caption.trim() || credit,
+        caption: caption.trim() ? credit : null, created_by: user.id,
       }).select().single()
       logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: data?.id, summary: 'pinned to the mood board', meta: { thumb_url: photo.urls.small } })
       onDone()
