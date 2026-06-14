@@ -24,11 +24,15 @@ export default function NotificationBell({ variant = 'sidebar' }) {
 
   useEffect(() => {
     load()
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {})
-    }
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        const r = Notification.requestPermission()
+        if (r && typeof r.then === 'function') r.catch(() => {})
+      }
+    } catch (e) { /* notifications unsupported/blocked — ignore */ }
     if (!user) return
-    const ch = supabase.channel('notif-' + user.id)
+    const chName = `notif-${user.id}-${variant}-${Math.random().toString(36).slice(2)}`
+    const ch = supabase.channel(chName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
         (payload) => {
           setItems((cur) => [payload.new, ...cur])
