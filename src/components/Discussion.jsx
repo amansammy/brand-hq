@@ -7,9 +7,10 @@ import { timeAgo } from '../lib/util.js'
 
 const EMOJIS = ['👍', '❤️', '🔥', '👀']
 
-export function Reactions({ entityType, entityId }) {
+export function Reactions({ entityType, entityId, showVoters }) {
   const { user, profiles } = useAuth()
   const [rows, setRows] = useState([])
+  const byId = (id) => profiles.find((p) => p.id === id) || { id, display_name: '?' }
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('reactions').select('*')
@@ -35,16 +36,25 @@ export function Reactions({ entityType, entityId }) {
     mine: rows.some((r) => r.user_id === user.id && r.emoji === e),
   }))
 
+  const voters = [...new Set(rows.map((r) => r.user_id))]
+
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      {counts.map(({ emoji, count, mine }) => (
-        <button key={emoji} onClick={() => toggle(emoji)}
-          className={`h-7 px-2 rounded-full text-xs flex items-center gap-1 border transition-colors ${
-            mine ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'
-          } ${count === 0 ? 'opacity-60' : ''}`}>
-          <span>{emoji}</span>{count > 0 && <span className="font-medium">{count}</span>}
-        </button>
-      ))}
+    <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {counts.map(({ emoji, count, mine }) => (
+          <button key={emoji} onClick={() => toggle(emoji)}
+            className={`h-7 px-2 rounded-full text-xs flex items-center gap-1 border transition-colors ${
+              mine ? 'border-accent bg-accent-soft' : 'border-line hover:border-line-strong'
+            } ${count === 0 ? 'opacity-60' : ''}`}>
+            <span>{emoji}</span>{count > 0 && <span className="font-medium">{count}</span>}
+          </button>
+        ))}
+      </div>
+      {showVoters && voters.length > 0 && (
+        <div className="flex items-center -space-x-1.5" title="Voted">
+          {voters.map((id) => <div key={id} className="ring-2 ring-surface rounded-full"><Avatar profile={byId(id)} size={20} /></div>)}
+        </div>
+      )}
     </div>
   )
 }

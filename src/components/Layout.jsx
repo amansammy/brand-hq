@@ -8,7 +8,8 @@ const GROUPS = [
   {
     label: 'Build',
     items: [
-      { to: '/', label: 'Feed', icon: 'feed', end: true },
+      { to: '/', label: 'Home', icon: 'home', end: true },
+      { to: '/feed', label: 'Feed', icon: 'feed' },
       { to: '/drops', label: 'Drops', icon: 'drops' },
       { to: '/tasks', label: 'Tasks', icon: 'tasks' },
       { to: '/files', label: 'Files', icon: 'files' },
@@ -26,7 +27,7 @@ const GROUPS = [
 ]
 
 const ALL = GROUPS.flatMap((g) => g.items)
-const BOTTOM = ['/', '/drops', '/tasks']
+const BOTTOM = ['/', '/feed', '/drops', '/tasks']
 const MORE = ALL.filter((i) => !BOTTOM.includes(i.to))
 
 export default function Layout() {

@@ -34,6 +34,7 @@ const P = {
   chevronDown: <><path d="m6 9 6 6 6-6" /></>,
   filter: <><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z" /></>,
   layout: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></>,
+  home: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" /></>,
 }
 
 export function Icon({ name, size = 20, className = '', strokeWidth = 1.8, ...rest }) {

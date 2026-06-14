@@ -8,6 +8,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
+import { LinkEditor } from '../components/Links.jsx'
+import { getLinksFrom, syncLinks } from '../lib/links.js'
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate } from '../lib/util.js'
 import { isPast, isToday, parseISO } from 'date-fns'
@@ -35,6 +37,7 @@ export default function Tasks() {
   const { user, profiles } = useAuth()
   const [tasks, setTasks] = useState([])
   const [milestones, setMilestones] = useState([])
+  const [linkCounts, setLinkCounts] = useState({})
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [activeId, setActiveId] = useState(null)
@@ -53,12 +56,16 @@ export default function Tasks() {
   )
 
   const load = useCallback(async () => {
-    const [t, m] = await Promise.all([
+    const [t, m, l] = await Promise.all([
       supabase.from('tasks').select('*').order('position').order('created_at'),
       supabase.from('milestones').select('*').order('due_date', { ascending: true, nullsFirst: false }),
+      supabase.from('links').select('from_id').eq('from_type', 'task'),
     ])
     setTasks(t.data || [])
     setMilestones(m.data || [])
+    const counts = {}
+    ;(l.data || []).forEach((r) => { counts[r.from_id] = (counts[r.from_id] || 0) + 1 })
+    setLinkCounts(counts)
     setLoading(false)
   }, [])
 
@@ -67,6 +74,7 @@ export default function Tasks() {
     const ch = supabase.channel('tasks')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'milestones' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'links' }, load)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
@@ -174,7 +182,7 @@ export default function Tasks() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {COLUMNS.map((col) => (
               <Column key={col.key} col={col} tasks={filtered.filter((t) => t.status === col.key)}
-                byId={byId} onOpen={setEditing} onQuickAdd={async (title) => {
+                byId={byId} linkCounts={linkCounts} onOpen={setEditing} onQuickAdd={async (title) => {
                   const { data } = await supabase.from('tasks').insert({ title, status: col.key, created_by: user.id }).select().single()
                   if (data) logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${title}`, meta: { title } })
                 }} />
@@ -193,7 +201,7 @@ export default function Tasks() {
   )
 }
 
-function Column({ col, tasks, byId, onOpen, onQuickAdd }) {
+function Column({ col, tasks, byId, linkCounts, onOpen, onQuickAdd }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
   const [adding, setAdding] = useState(false)
   const [val, setVal] = useState('')
@@ -204,7 +212,7 @@ function Column({ col, tasks, byId, onOpen, onQuickAdd }) {
         <span className="text-xs text-faint bg-canvas border border-line rounded-full px-2 py-0.5">{tasks.length}</span>
       </div>
       <div ref={setNodeRef} className={`space-y-2.5 min-h-[80px] rounded-xl transition-colors ${isOver ? 'bg-accent-soft/40 outline outline-2 outline-dashed outline-accent/30' : ''}`}>
-        {tasks.map((t) => <DraggableCard key={t.id} task={t} byId={byId} onOpen={onOpen} />)}
+        {tasks.map((t) => <DraggableCard key={t.id} task={t} byId={byId} links={linkCounts[t.id] || 0} onOpen={onOpen} />)}
       </div>
       {adding ? (
         <form onSubmit={(e) => { e.preventDefault(); if (val.trim()) { onQuickAdd(val.trim()); setVal(''); setAdding(false) } }} className="mt-2">
@@ -218,17 +226,17 @@ function Column({ col, tasks, byId, onOpen, onQuickAdd }) {
   )
 }
 
-function DraggableCard({ task, byId, onOpen }) {
+function DraggableCard({ task, byId, links, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.4 : 1 }
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onOpen(task)}>
-      <TaskCard task={task} byId={byId} />
+      <TaskCard task={task} byId={byId} links={links} />
     </div>
   )
 }
 
-function TaskCard({ task, byId, overlay }) {
+function TaskCard({ task, byId, overlay, links = 0 }) {
   const a = byId(task.assignee)
   const ds = dueState(task.due_date, task.status)
   const subs = task.subtasks || []
@@ -249,6 +257,9 @@ function TaskCard({ task, byId, overlay }) {
           {a ? <Avatar profile={a} size={22} /> : <span className="text-[11px] text-faint">Unassigned</span>}
           {subs.length > 0 && (
             <span className="chip h-5 px-1.5 bg-canvas border border-line text-faint"><Icon name="check" size={11} /> {subDone}/{subs.length}</span>
+          )}
+          {links > 0 && (
+            <span className="chip h-5 px-1.5 bg-accent-soft text-accent"><Icon name="link" size={11} /> {links}</span>
           )}
         </div>
         {task.due_date && (
@@ -293,7 +304,12 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
   const [subtasks, setSubtasks] = useState(task?.subtasks || [])
   const [labelInput, setLabelInput] = useState('')
   const [subInput, setSubInput] = useState('')
+  const [links, setLinks] = useState([])
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (task) getLinksFrom('task', task.id).then((rows) => setLinks(rows.map((r) => ({ to_type: r.to_type, to_id: r.to_id }))))
+  }, [task])
 
   function addLabel(e) { e.preventDefault(); const v = labelInput.trim(); if (v && !labels.includes(v)) setLabels([...labels, v]); setLabelInput('') }
   function addSub(e) { e.preventDefault(); const v = subInput.trim(); if (v) setSubtasks([...subtasks, { text: v, done: false }]); setSubInput('') }
@@ -304,11 +320,13 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
     setSaving(true)
     const payload = { title: title.trim(), description: description.trim() || null, assignee: assignee || null,
       due_date: dueDate || null, status, priority, labels, subtasks }
+    let taskId = task?.id
     if (task) await supabase.from('tasks').update(payload).eq('id', task.id)
     else {
       const { data } = await supabase.from('tasks').insert({ ...payload, created_by: user.id }).select().single()
-      if (data) logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${data.title}`, meta: { title: data.title } })
+      if (data) { taskId = data.id; logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${data.title}`, meta: { title: data.title } }) }
     }
+    if (taskId) await syncLinks('task', taskId, links, user.id)
     setSaving(false); onClose()
   }
 
@@ -382,6 +400,11 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
             <input className="input h-9 text-sm" placeholder="Add a checklist item…" value={subInput} onChange={(e) => setSubInput(e.target.value)} />
             <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!subInput.trim()}><Icon name="plus" size={15} /></button>
           </form>
+        </div>
+
+        {/* Links */}
+        <div><label className="label">Related to</label>
+          <LinkEditor value={links} onChange={setLinks} />
         </div>
       </div>
     </Modal>

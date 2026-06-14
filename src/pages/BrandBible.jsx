@@ -55,6 +55,18 @@ export default function BrandBible() {
         action={textDirty && <button onClick={saveText} className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>} />
 
       <div className="space-y-5">
+        {/* Logo (auto-set from the Logo Arena winner) */}
+        {bible.logo_url && (
+          <Section icon="trophy" title="Logo">
+            <div className="flex items-center gap-4">
+              <div className="h-24 w-24 rounded-xl border border-line bg-canvas grid place-items-center overflow-hidden shrink-0">
+                <img src={bible.logo_url} alt="Brand logo" className="max-h-24 max-w-full object-contain" />
+              </div>
+              <p className="text-sm text-muted">Chosen in the Logo Arena. Pick a different winner there and it updates here automatically.</p>
+            </div>
+          </Section>
+        )}
+
         {/* Manifesto */}
         <Section icon="notes" title="Manifesto">
           <textarea className="input min-h-[160px] leading-relaxed font-display text-[15px]"

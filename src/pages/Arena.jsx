@@ -4,6 +4,8 @@ import { supabase, logActivity, purgeEntity, uploadPublicImage } from '../lib/su
 import { useAuth } from '../lib/auth.jsx'
 import { EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Reactions, Comments } from '../components/Discussion.jsx'
+import { LinkedTasks } from '../components/Links.jsx'
+import { BIBLE_ID } from '../lib/links.js'
 import { Icon } from '../lib/icons.jsx'
 
 export default function Arena() {
@@ -120,6 +122,7 @@ function ArenaModal({ user, onClose, onDone }) {
 
 function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
   const [adding, setAdding] = useState(false)
+  const [comparing, setComparing] = useState(false)
 
   async function deleteArena() {
     if (!confirm('Delete this arena and all options?')) return
@@ -130,7 +133,9 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
   async function makeWinner(c) {
     await supabase.from('arena_candidates').update({ is_winner: false }).eq('arena_id', arena.id)
     await supabase.from('arena_candidates').update({ is_winner: true }).eq('id', c.id)
-    logActivity({ verb: 'completed', entity_type: 'arena', entity_id: arena.id, summary: `picked a winner in "${arena.title}"`, meta: { thumb_url: c.image_url } })
+    // Propagate: the winning logo becomes the brand's logo in the Brand Bible.
+    await supabase.from('brand_bible').update({ logo_url: c.image_url, logo_path: c.image_path, updated_by: user.id, updated_at: new Date().toISOString() }).eq('id', 1)
+    logActivity({ verb: 'completed', entity_type: 'arena', entity_id: arena.id, summary: `decided "${arena.title}" — winner picked`, meta: { thumb_url: c.image_url } })
     onChange()
   }
   async function removeCandidate(c) {
@@ -139,6 +144,7 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
     onChange()
   }
 
+  const winner = candidates.find((c) => c.is_winner)
   const sorted = [...candidates].sort((a, b) => (b.is_winner ? 1 : 0) - (a.is_winner ? 1 : 0))
 
   return (
@@ -147,16 +153,30 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
         <Icon name="chevronDown" size={16} className="rotate-90" /> All arenas
       </button>
 
-      <div className="flex items-start justify-between gap-3 mb-6">
+      <div className="flex items-start justify-between gap-3 mb-5">
         <div>
           <h1 className="font-display text-2xl">{arena.title}</h1>
           {arena.description && <p className="text-sm text-muted mt-1">{arena.description}</p>}
         </div>
         <div className="flex gap-2 shrink-0">
+          {candidates.length >= 2 && <button onClick={() => setComparing(true)} className="btn btn-soft h-9"><Icon name="layout" size={16} /> Compare</button>}
           <button onClick={() => setAdding(true)} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Add option</button>
           <button onClick={deleteArena} className="btn btn-soft h-9 px-3 text-accent"><Icon name="trash" size={15} /></button>
         </div>
       </div>
+
+      {/* Resolved decision banner */}
+      {winner && (
+        <div className="card p-3 mb-5 flex items-center gap-3 bg-accent-soft/40 border-accent/30">
+          <div className="h-12 w-12 rounded-lg overflow-hidden border border-line bg-surface shrink-0 grid place-items-center">
+            {winner.image_url && <img src={winner.image_url} alt="" className="h-full w-full object-contain" />}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium flex items-center gap-1"><Icon name="trophy" size={14} className="text-accent" /> Decided{winner.label ? `: ${winner.label}` : ''}</p>
+            <p className="text-xs text-muted">This is now the brand's logo in the Brand Bible.</p>
+          </div>
+        </div>
+      )}
 
       {candidates.length === 0 ? (
         <EmptyState icon="image" title="No options yet" subtitle="Upload the candidates you want to choose between." />
@@ -174,9 +194,9 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
               <div className="p-4">
                 {c.label && <p className="font-medium">{c.label}</p>}
                 {c.rationale && <p className="text-sm text-muted mt-0.5">{c.rationale}</p>}
-                <div className="flex items-center justify-between mt-3">
-                  <Reactions entityType="candidate" entityId={c.id} />
-                  {!c.is_winner && <button onClick={() => makeWinner(c)} className="btn btn-soft h-8 px-3 text-accent"><Icon name="trophy" size={14} /> Pick winner</button>}
+                <div className="flex items-center justify-between mt-3 gap-2">
+                  <Reactions entityType="candidate" entityId={c.id} showVoters />
+                  {!c.is_winner && <button onClick={() => makeWinner(c)} className="btn btn-soft h-8 px-3 text-accent shrink-0"><Icon name="trophy" size={14} /> Pick winner</button>}
                 </div>
                 <div className="mt-3 pt-3 border-t border-line">
                   <Comments entityType="candidate" entityId={c.id} compact />
@@ -187,8 +207,40 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
         </div>
       )}
 
+      {/* Linked tasks */}
+      <div className="mt-8">
+        <h2 className="font-display text-lg mb-3 flex items-center gap-2"><Icon name="link" size={16} className="text-accent" /> Linked tasks</h2>
+        <LinkedTasks toType="arena" toId={arena.id} />
+      </div>
+
       {adding && <CandidateModal arena={arena} user={user} onClose={() => setAdding(false)} onChange={onChange} />}
+      {comparing && <CompareModal candidates={candidates} onClose={() => setComparing(false)} onPick={(c) => { makeWinner(c); setComparing(false) }} />}
     </div>
+  )
+}
+
+function CompareModal({ candidates, onClose, onPick }) {
+  return (
+    <Modal open onClose={onClose} title="Compare options" maxWidth="max-w-4xl">
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {candidates.map((c) => (
+          <div key={c.id} className={`w-64 shrink-0 card overflow-hidden ${c.is_winner ? 'ring-2 ring-accent' : ''}`}>
+            <div className="bg-canvas grid place-items-center h-48">
+              {c.image_url && <img src={c.image_url} alt="" className="max-h-48 max-w-full object-contain" />}
+            </div>
+            <div className="p-3">
+              {c.label && <p className="text-sm font-medium truncate">{c.label}</p>}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <Reactions entityType="candidate" entityId={c.id} showVoters />
+              </div>
+              <button onClick={() => onPick(c)} className={`btn h-8 w-full mt-2 text-xs ${c.is_winner ? 'btn-soft text-accent' : 'btn-primary'}`}>
+                <Icon name="trophy" size={13} /> {c.is_winner ? 'Winner' : 'Pick this'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
   )
 }
 

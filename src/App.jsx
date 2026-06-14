@@ -5,6 +5,7 @@ import { Spinner } from './components/ui.jsx'
 import Layout from './components/Layout.jsx'
 import Setup from './pages/Setup.jsx'
 import Login from './pages/Login.jsx'
+import Home from './pages/Home.jsx'
 import Feed from './pages/Feed.jsx'
 import Tasks from './pages/Tasks.jsx'
 import Files from './pages/Files.jsx'
@@ -24,7 +25,8 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Feed />} />
+        <Route index element={<Home />} />
+        <Route path="feed" element={<Feed />} />
         <Route path="drops" element={<Drops />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="files" element={<Files />} />

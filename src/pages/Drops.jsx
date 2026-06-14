@@ -4,6 +4,7 @@ import { supabase, logActivity, purgeEntity, uploadPublicImage } from '../lib/su
 import { useAuth } from '../lib/auth.jsx'
 import { EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Comments } from '../components/Discussion.jsx'
+import { LinkedTasks } from '../components/Links.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate } from '../lib/util.js'
 import { differenceInCalendarDays } from 'date-fns'
@@ -271,6 +272,12 @@ function CollectionDetail({ collection, garments, user, onBack, onChange }) {
           })}
         </div>
       )}
+
+      {/* Linked tasks */}
+      <div className="mt-8">
+        <h2 className="font-display text-lg mb-3 flex items-center gap-2"><Icon name="link" size={16} className="text-accent" /> Linked tasks</h2>
+        <LinkedTasks toType="collection" toId={collection.id} />
+      </div>
 
       {editing && <CollectionModal collection={collection} user={user} onClose={() => setEditing(false)} onChange={onChange} />}
       {garment && <GarmentModal garment={garment === 'new' ? null : garment} collection={collection} user={user}
