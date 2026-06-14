@@ -6,6 +6,7 @@ import { Icon } from '../lib/icons.jsx'
 
 // ---- Editor used inside the Task modal: pick what this task relates to ----
 export function LinkEditor({ value, onChange }) {
+  const navigate = useNavigate()
   const [catalog, setCatalog] = useState([])
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -22,12 +23,16 @@ export function LinkEditor({ value, onChange }) {
       <div className={`flex flex-wrap gap-1.5 ${value.length ? 'mb-2' : ''}`}>
         {value.map((v) => {
           const r = v.to_type === 'brand_bible' ? { label: 'Brand bible', icon: 'brand' } : resolve(v.to_type, v.to_id)
+          const route = linkRoute(v.to_type, v.to_id)
           return (
-            <span key={`${v.to_type}:${v.to_id}`} className="chip h-6 px-2 bg-accent-soft text-accent">
-              <Icon name={r?.icon || LINK_TYPES[v.to_type]?.icon || 'link'} size={12} />
-              {r?.label || LINK_TYPES[v.to_type]?.label || 'item'}
-              <button onClick={() => onChange(value.filter((x) => !(x.to_type === v.to_type && x.to_id === v.to_id)))}
-                className="hover:opacity-70"><Icon name="close" size={11} /></button>
+            <span key={`${v.to_type}:${v.to_id}`} className="chip h-7 pl-2 pr-1.5 bg-accent-soft text-accent">
+              <button type="button" onClick={() => route && navigate(route)} className="flex items-center gap-1 hover:underline" title="Open">
+                <Icon name={r?.icon || LINK_TYPES[v.to_type]?.icon || 'link'} size={12} />
+                {r?.label || LINK_TYPES[v.to_type]?.label || 'item'}
+                <Icon name="chevronDown" size={12} className="-rotate-90 opacity-70" />
+              </button>
+              <button type="button" onClick={() => onChange(value.filter((x) => !(x.to_type === v.to_type && x.to_id === v.to_id)))}
+                className="hover:opacity-70 ml-0.5"><Icon name="close" size={11} /></button>
             </span>
           )
         })}
