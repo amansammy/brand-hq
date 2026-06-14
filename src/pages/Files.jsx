@@ -4,6 +4,7 @@ import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Comments } from '../components/Discussion.jsx'
+import { LinkedTasks } from '../components/Links.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { timeAgo, fileSize } from '../lib/util.js'
 
@@ -11,18 +12,25 @@ export default function Files() {
   const { user, profiles } = useAuth()
   const [files, setFiles] = useState([])
   const [versions, setVersions] = useState([])
+  const [commentCounts, setCommentCounts] = useState({})
+  const [linkCounts, setLinkCounts] = useState({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null) // file id
   const [creating, setCreating] = useState(false)
   const [params, setParams] = useSearchParams()
 
   const load = useCallback(async () => {
-    const [f, v] = await Promise.all([
+    const [f, v, cm, lk] = await Promise.all([
       supabase.from('files').select('*').order('created_at', { ascending: false }),
       supabase.from('file_versions').select('*').order('version_no', { ascending: false }),
+      supabase.from('comments').select('entity_id').eq('entity_type', 'file'),
+      supabase.from('links').select('to_id').eq('to_type', 'file'),
     ])
     setFiles(f.data || [])
     setVersions(v.data || [])
+    const cc = {}; (cm.data || []).forEach((r) => { cc[r.entity_id] = (cc[r.entity_id] || 0) + 1 })
+    const lc = {}; (lk.data || []).forEach((r) => { lc[r.to_id] = (lc[r.to_id] || 0) + 1 })
+    setCommentCounts(cc); setLinkCounts(lc)
     setLoading(false)
   }, [])
 
@@ -31,6 +39,8 @@ export default function Files() {
     const ch = supabase.channel('files')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'files' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'file_versions' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'links' }, load)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
@@ -73,11 +83,18 @@ export default function Files() {
                       <p className="font-medium truncate">{f.name}</p>
                       {final && <span className="chip bg-accent-soft text-accent">✓ Final</span>}
                     </div>
-                    {f.description && <p className="text-sm text-muted mt-0.5 line-clamp-1">{f.description}</p>}
-                    <p className="text-xs text-faint mt-2">
-                      {vs.length} version{vs.length !== 1 ? 's' : ''}
-                      {latest && ` · updated ${timeAgo(latest.created_at)}`}
-                    </p>
+                    {(final || latest) && (
+                      <p className="text-xs text-muted mt-0.5 truncate flex items-center gap-1">
+                        <Icon name="files" size={11} className="text-faint shrink-0" /> {(final || latest).file_name || 'file'}
+                      </p>
+                    )}
+                    {f.description && <p className="text-sm text-muted mt-1 line-clamp-1">{f.description}</p>}
+                    <div className="flex items-center gap-3 text-xs text-faint mt-2">
+                      <span>{vs.length} version{vs.length !== 1 ? 's' : ''}</span>
+                      {(commentCounts[f.id] > 0) && <span className="flex items-center gap-1"><Icon name="comment" size={11} /> {commentCounts[f.id]}</span>}
+                      {(linkCounts[f.id] > 0) && <span className="flex items-center gap-1 text-accent"><Icon name="link" size={11} /> {linkCounts[f.id]}</span>}
+                      {latest && <span>· {timeAgo(latest.created_at)}</span>}
+                    </div>
                   </div>
                 </div>
               </button>
@@ -234,6 +251,10 @@ function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange 
           </div>
         ))}
       </div>
+
+      {/* Linked tasks */}
+      <h3 className="text-sm font-semibold text-muted mb-2">Linked tasks</h3>
+      <div className="mb-6"><LinkedTasks toType="file" toId={fileId} /></div>
 
       {/* Discussion */}
       <h3 className="text-sm font-semibold text-muted mb-2">Discussion</h3>
