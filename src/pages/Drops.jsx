@@ -131,11 +131,12 @@ function CollectionModal({ user, collection, onClose, onDone, onChange }) {
   const [launch, setLaunch] = useState(collection?.launch_date || '')
   const [cover, setCover] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   const inputRef = useRef()
 
   async function save() {
     if (!name.trim()) return
-    setBusy(true)
+    setBusy(true); setErr('')
     try {
       let coverPatch = {}
       if (cover) {
@@ -144,14 +145,16 @@ function CollectionModal({ user, collection, onClose, onDone, onChange }) {
       }
       const payload = { name: name.trim(), theme: theme.trim() || null, status, launch_date: launch || null, ...coverPatch }
       if (collection) {
-        await supabase.from('collections').update(payload).eq('id', collection.id)
+        const { error } = await supabase.from('collections').update(payload).eq('id', collection.id)
+        if (error) throw error
         onChange?.(); onClose()
       } else {
-        const { data } = await supabase.from('collections').insert({ ...payload, created_by: user.id }).select().single()
+        const { data, error } = await supabase.from('collections').insert({ ...payload, created_by: user.id }).select().single()
+        if (error) throw error
         logActivity({ verb: 'created', entity_type: 'collection', entity_id: data.id, summary: `started a collection: ${data.name}`, meta: { thumb_url: data.cover_url } })
         onDone(data.id)
       }
-    } finally { setBusy(false) }
+    } catch (e) { setErr(e.message || String(e)) } finally { setBusy(false) }
   }
 
   return (
@@ -177,6 +180,7 @@ function CollectionModal({ user, collection, onClose, onDone, onChange }) {
           </button>
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => setCover(e.target.files?.[0] || null)} />
         </div>
+        {err && <p className="text-sm text-accent">{err}</p>}
       </div>
     </Modal>
   )

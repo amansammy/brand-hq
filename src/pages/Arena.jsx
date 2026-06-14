@@ -92,12 +92,16 @@ function ArenaModal({ user, onClose, onDone }) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
   async function save() {
     if (!title.trim()) return
-    setBusy(true)
-    const { data } = await supabase.from('arenas').insert({ title: title.trim(), description: description.trim() || null, created_by: user.id }).select().single()
-    logActivity({ verb: 'created', entity_type: 'arena', entity_id: data.id, summary: `opened an arena: ${data.title}` })
-    setBusy(false); onDone(data.id)
+    setBusy(true); setErr('')
+    try {
+      const { data, error } = await supabase.from('arenas').insert({ title: title.trim(), description: description.trim() || null, created_by: user.id }).select().single()
+      if (error) throw error
+      logActivity({ verb: 'created', entity_type: 'arena', entity_id: data.id, summary: `opened an arena: ${data.title}` })
+      onDone(data.id)
+    } catch (e) { setErr(e.message || String(e)); setBusy(false) }
   }
   return (
     <Modal open onClose={onClose} title="New arena"
@@ -108,6 +112,7 @@ function ArenaModal({ user, onClose, onDone }) {
           <input className="input" autoFocus placeholder="e.g. Primary logo" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
         <div><label className="label">Description (optional)</label>
           <input className="input" placeholder="Context for the options" value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        {err && <p className="text-sm text-accent">{err}</p>}
       </div>
     </Modal>
   )
