@@ -262,7 +262,7 @@ function CollectionDetail({ collection, garments, user, onBack, onChange }) {
                       <p className="text-sm font-medium truncate">{g.name}</p>
                       <div className="flex items-center justify-between mt-0.5">
                         {g.category && <span className="text-xs text-faint">{g.category}</span>}
-                        {g.price != null && <span className="text-xs text-muted">₹{g.price}</span>}
+                        {g.price != null && <span className="text-xs text-muted">${g.price}</span>}
                       </div>
                     </button>
                   ))}
@@ -334,7 +334,7 @@ function GarmentModal({ garment, collection, user, onClose, onChange }) {
             <select className="input" value={stage} onChange={(e) => setStage(e.target.value)}>
               {STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select></div>
-          <div><label className="label">Target price (₹)</label>
+          <div><label className="label">Target price ($)</label>
             <input className="input" type="number" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
         <div><label className="label">Notes</label>

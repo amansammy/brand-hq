@@ -5,7 +5,7 @@ import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate, todayISO } from '../lib/util.js'
 
-const money = (n) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-CA', { maximumFractionDigits: 2 })
 
 export default function Budget() {
   const { user, profiles } = useAuth()
@@ -153,7 +153,7 @@ function Allocations({ allocations, expenses, user }) {
       </div>
       <form onSubmit={add} className="flex gap-2">
         <input className="input h-9 text-sm flex-1 min-w-0" placeholder="Category" value={cat} onChange={(e) => setCat(e.target.value)} />
-        <input className="input h-9 text-sm w-24 min-w-0" type="number" placeholder="₹" value={amt} onChange={(e) => setAmt(e.target.value)} />
+        <input className="input h-9 text-sm w-24 min-w-0" type="number" placeholder="$" value={amt} onChange={(e) => setAmt(e.target.value)} />
         <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!cat.trim() || !amt}><Icon name="plus" size={15} /></button>
       </form>
     </div>
@@ -170,7 +170,7 @@ function PricingCalculator() {
   const Field = ({ k, label }) => (
     <div>
       <label className="label">{label}</label>
-      <input className="input h-9 text-sm" type="number" placeholder="₹0" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
+      <input className="input h-9 text-sm" type="number" placeholder="$0" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
     </div>
   )
 
@@ -226,7 +226,7 @@ function ExpenseModal({ profiles, user, onClose }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="label">What for</label>
             <input className="input" autoFocus placeholder="e.g. Cotton fabric — 20m" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-          <div><label className="label">Amount (₹)</label>
+          <div><label className="label">Amount ($)</label>
             <input className="input" type="number" placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
