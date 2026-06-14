@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar } from './ui.jsx'
+import MentionInput, { MentionText } from './MentionInput.jsx'
+import { notify, parseMentions } from '../lib/notify.js'
+import { entityLink } from '../lib/config.js'
 import { Icon } from '../lib/icons.jsx'
 import { timeAgo } from '../lib/util.js'
 
@@ -80,6 +83,12 @@ export function Comments({ entityType, entityId, compact }) {
     const body = text.trim()
     setText('')
     await supabase.from('comments').insert({ entity_type: entityType, entity_id: entityId, body, created_by: user.id })
+    const meName = profiles.find((p) => p.id === user.id)?.display_name || 'Someone'
+    const link = entityType === 'activity' ? '/feed' : (entityLink(entityType, entityId) || null)
+    const mentioned = parseMentions(body, profiles)
+    const others = profiles.map((p) => p.id).filter((id) => id !== user.id && !mentioned.includes(id))
+    await notify({ userIds: mentioned, actor: user.id, type: 'mention', body: `${meName} mentioned you in a comment`, link })
+    await notify({ userIds: others, actor: user.id, type: 'comment', body: `${meName} commented`, link })
     load()
   }
 
@@ -95,15 +104,15 @@ export function Comments({ entityType, entityId, compact }) {
                   <span className="text-sm font-medium">{byId(c.created_by).display_name}</span>
                   <span className="text-xs text-faint">{timeAgo(c.created_at)}</span>
                 </div>
-                <p className="text-sm text-ink/90 whitespace-pre-wrap break-words">{c.body}</p>
+                <p className="text-sm text-ink/90 whitespace-pre-wrap break-words"><MentionText text={c.body} profiles={profiles} /></p>
               </div>
             </div>
           ))}
         </div>
       )}
       <form onSubmit={send} className="flex items-center gap-2">
-        <input className="input h-9 text-sm" placeholder="Write a comment…"
-          value={text} onChange={(e) => setText(e.target.value)} />
+        <MentionInput profiles={profiles} className="input h-9 text-sm" placeholder="Write a comment…  (@ to mention)"
+          value={text} onChange={setText} />
         <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!text.trim()}>
           <Icon name="send" size={16} />
         </button>

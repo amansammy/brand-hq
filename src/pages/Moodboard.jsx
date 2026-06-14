@@ -50,9 +50,15 @@ export default function Moodboard() {
                 <img src={it.url} alt={it.caption || ''} className="w-full block" loading="lazy" />
               ) : (
                 <a href={it.url} target="_blank" rel="noreferrer"
-                  className="block p-5 bg-canvas hover:bg-accent-soft/40 transition-colors">
-                  <Icon name="link" size={20} className="text-accent mb-2" />
-                  <p className="text-sm font-medium break-words line-clamp-3">{it.url}</p>
+                  className="block hover:bg-accent-soft/30 transition-colors">
+                  {it.preview_image && <img src={it.preview_image} alt="" className="w-full block" loading="lazy" />}
+                  <div className="p-4">
+                    <p className="text-sm font-medium break-words line-clamp-2 flex items-start gap-1.5">
+                      <Icon name="link" size={14} className="text-accent mt-0.5 shrink-0" />
+                      {it.title || it.url}
+                    </p>
+                    {it.title && <p className="text-xs text-faint truncate mt-1">{(() => { try { return new URL(it.url).hostname } catch { return it.url } })()}</p>}
+                  </div>
                 </a>
               )}
               {it.caption && <p className="text-sm text-muted px-3 py-2">{it.caption}</p>}
@@ -77,7 +83,39 @@ function AddModal({ user, onClose, onDone }) {
   const [caption, setCaption] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [uq, setUq] = useState('')
+  const [uresults, setUresults] = useState([])
+  const [uloading, setUloading] = useState(false)
   const inputRef = useRef()
+  const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_KEY
+  const hasUnsplash = !!UNSPLASH_KEY
+
+  useEffect(() => {
+    if (tab !== 'unsplash' || !uq.trim()) { setUresults([]); return }
+    let cancel = false
+    setUloading(true)
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=12&query=${encodeURIComponent(uq)}`,
+          { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
+        const j = await r.json()
+        if (!cancel) setUresults(j.results || [])
+      } catch (e) { if (!cancel) setUresults([]) }
+      finally { if (!cancel) setUloading(false) }
+    }, 350)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [uq, tab])
+
+  async function addUnsplash(photo) {
+    setBusy(true); setErr('')
+    try {
+      const { data } = await supabase.from('moodboard_items').insert({
+        type: 'image', url: photo.urls.regular, caption: caption.trim() || `Photo: ${photo.user?.name} / Unsplash`, created_by: user.id,
+      }).select().single()
+      logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: data?.id, summary: 'pinned to the mood board', meta: { thumb_url: photo.urls.small } })
+      onDone()
+    } catch (e) { setErr(e.message); setBusy(false) }
+  }
 
   async function submit() {
     setBusy(true); setErr('')
@@ -95,7 +133,14 @@ function AddModal({ user, onClose, onDone }) {
         row = data
       } else {
         if (!url.trim()) return
-        const { data } = await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), caption: caption.trim() || null, created_by: user.id }).select().single()
+        let title = null, preview = null
+        try {
+          const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url.trim())}`)
+          const j = await r.json()
+          if (j?.status === 'success') { title = j.data?.title || null; preview = j.data?.image?.url || j.data?.logo?.url || null }
+        } catch (e) { /* preview is best-effort */ }
+        thumb = preview
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), title, preview_image: preview, caption: caption.trim() || null, created_by: user.id }).select().single()
         row = data
       }
       logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: row?.id, summary: 'pinned to the mood board', meta: { thumb_url: thumb } })
@@ -109,14 +154,15 @@ function AddModal({ user, onClose, onDone }) {
     <Modal open onClose={onClose} title="Add to mood board"
       footer={<>
         <button onClick={onClose} className="btn btn-soft">Cancel</button>
-        <button onClick={submit} className="btn btn-primary" disabled={!canSubmit || busy}>{busy ? 'Adding…' : 'Add'}</button>
+        {tab !== 'unsplash' && <button onClick={submit} className="btn btn-primary" disabled={!canSubmit || busy}>{busy ? 'Adding…' : 'Add'}</button>}
       </>}>
       <div className="flex gap-2 mb-4">
         <button onClick={() => setTab('image')} className={`btn flex-1 ${tab === 'image' ? 'btn-primary' : 'btn-soft'}`}><Icon name="image" size={16} /> Image</button>
         <button onClick={() => setTab('link')} className={`btn flex-1 ${tab === 'link' ? 'btn-primary' : 'btn-soft'}`}><Icon name="link" size={16} /> Link</button>
+        {hasUnsplash && <button onClick={() => setTab('unsplash')} className={`btn flex-1 ${tab === 'unsplash' ? 'btn-primary' : 'btn-soft'}`}><Icon name="search" size={16} /> Unsplash</button>}
       </div>
 
-      {tab === 'image' ? (
+      {tab === 'image' && (
         <>
           <button type="button" onClick={() => inputRef.current?.click()}
             className="w-full border border-dashed border-line-strong rounded-xl py-8 flex flex-col items-center gap-2 text-muted hover:border-accent hover:text-accent transition-colors">
@@ -125,17 +171,36 @@ function AddModal({ user, onClose, onDone }) {
           </button>
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => setFileObj(e.target.files?.[0] || null)} />
         </>
-      ) : (
+      )}
+      {tab === 'link' && (
         <div>
           <label className="label">URL</label>
           <input className="input" autoFocus placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <p className="text-xs text-faint mt-1">We'll fetch a title and preview image automatically.</p>
+        </div>
+      )}
+      {tab === 'unsplash' && (
+        <div>
+          <input className="input" autoFocus placeholder="Search Unsplash — e.g. linen texture, streetwear…" value={uq} onChange={(e) => setUq(e.target.value)} />
+          <div className="grid grid-cols-3 gap-2 mt-3 max-h-72 overflow-y-auto">
+            {uloading && <p className="col-span-3 text-sm text-faint text-center py-6">Searching…</p>}
+            {!uloading && uresults.map((p) => (
+              <button key={p.id} onClick={() => addUnsplash(p)} disabled={busy}
+                className="aspect-square rounded-lg overflow-hidden border border-line hover:border-accent">
+                <img src={p.urls.thumb} alt={p.alt_description || ''} className="h-full w-full object-cover" loading="lazy" />
+              </button>
+            ))}
+            {!uloading && uq.trim() && uresults.length === 0 && <p className="col-span-3 text-sm text-faint text-center py-6">No photos found.</p>}
+          </div>
         </div>
       )}
 
-      <div className="mt-4">
-        <label className="label">Caption (optional)</label>
-        <input className="input" placeholder="Why it inspires you…" value={caption} onChange={(e) => setCaption(e.target.value)} />
-      </div>
+      {tab !== 'unsplash' && (
+        <div className="mt-4">
+          <label className="label">Caption (optional)</label>
+          <input className="input" placeholder="Why it inspires you…" value={caption} onChange={(e) => setCaption(e.target.value)} />
+        </div>
+      )}
       {err && <p className="text-sm text-accent mt-3">{err}</p>}
     </Modal>
   )

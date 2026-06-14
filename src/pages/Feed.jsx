@@ -5,6 +5,8 @@ import { useAuth } from '../lib/auth.jsx'
 import { isAdmin, entityLink } from '../lib/config.js'
 import { Avatar, EmptyState, Spinner, PageHeader } from '../components/ui.jsx'
 import { Reactions, Comments } from '../components/Discussion.jsx'
+import MentionInput, { MentionText } from '../components/MentionInput.jsx'
+import { notify, parseMentions } from '../lib/notify.js'
 import { Icon } from '../lib/icons.jsx'
 import { timeAgo } from '../lib/util.js'
 
@@ -49,7 +51,13 @@ export default function Feed() {
     e.preventDefault()
     if (!text.trim()) return
     setPosting(true)
-    await logActivity({ verb: 'posted', entity_type: 'post', body: text.trim() })
+    const body = text.trim()
+    await logActivity({ verb: 'posted', entity_type: 'post', body })
+    const meName = me?.display_name || 'Someone'
+    const mentioned = parseMentions(body, profiles)
+    const others = profiles.map((p) => p.id).filter((id) => id !== user.id && !mentioned.includes(id))
+    await notify({ userIds: mentioned, actor: user.id, type: 'mention', body: `${meName} mentioned you in a post`, link: '/feed' })
+    await notify({ userIds: others, actor: user.id, type: 'post', body: `${meName} posted an update`, link: '/feed' })
     setText(''); setPosting(false)
   }
 
@@ -77,9 +85,10 @@ export default function Feed() {
         <form onSubmit={post}>
           <div className="flex gap-3">
             <Avatar profile={me} size={36} />
-            <textarea className="input min-h-[44px] py-2.5" rows={text ? 3 : 1}
-              placeholder="Share an update, a question, a decision…"
-              value={text} onChange={(e) => setText(e.target.value)} />
+            <MentionInput multiline rows={text ? 3 : 1} profiles={profiles}
+              className="input min-h-[44px] py-2.5"
+              placeholder="Share an update…  (type @ to mention)"
+              value={text} onChange={setText} />
           </div>
           {text.trim() && (
             <div className="flex justify-end mt-3 animate-in">
@@ -137,7 +146,7 @@ export default function Feed() {
                     </div>
 
                     {isPost && a.body && (
-                      <p className="text-[15px] leading-relaxed mt-1.5 whitespace-pre-wrap break-words">{a.body}</p>
+                      <p className="text-[15px] leading-relaxed mt-1.5 whitespace-pre-wrap break-words"><MentionText text={a.body} profiles={profiles} /></p>
                     )}
                     {!isPost && a.body && (
                       <p className="text-sm text-muted mt-1 whitespace-pre-wrap break-words">{a.body}</p>

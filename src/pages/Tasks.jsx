@@ -10,6 +10,7 @@ import { useAuth } from '../lib/auth.jsx'
 import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { LinkEditor } from '../components/Links.jsx'
 import { getLinksFrom, syncLinks } from '../lib/links.js'
+import { notify } from '../lib/notify.js'
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate, todayISO } from '../lib/util.js'
 import { isPast, isToday, parseISO } from 'date-fns'
@@ -328,6 +329,10 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
       if (data) { taskId = data.id; logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${data.title}`, meta: { title: data.title } }) }
     }
     if (taskId) await syncLinks('task', taskId, links, user.id)
+    if (assignee && assignee !== user.id && assignee !== task?.assignee) {
+      const meName = profiles.find((p) => p.id === user.id)?.display_name || 'Someone'
+      await notify({ userIds: [assignee], actor: user.id, type: 'assigned', body: `${meName} assigned you: ${title.trim()}`, link: `/tasks?open=${taskId}` })
+    }
     setSaving(false); onClose()
   }
 

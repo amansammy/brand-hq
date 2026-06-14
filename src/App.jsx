@@ -14,6 +14,7 @@ import Moodboard from './pages/Moodboard.jsx'
 import Drops from './pages/Drops.jsx'
 import Arena from './pages/Arena.jsx'
 import BrandBible from './pages/BrandBible.jsx'
+import Budget from './pages/Budget.jsx'
 
 export default function App() {
   const { session, loading } = useAuth()
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="files" element={<Files />} />
         <Route path="notes" element={<Notes />} />
+        <Route path="budget" element={<Budget />} />
         <Route path="brand" element={<BrandBible />} />
         <Route path="arena" element={<Arena />} />
         <Route path="mood" element={<Moodboard />} />

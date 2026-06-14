@@ -3,6 +3,7 @@ import { supabase, logActivity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Spinner, PageHeader } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
+import { GOOGLE_FONTS, loadFont } from '../lib/fonts.js'
 
 export default function BrandBible() {
   const { user } = useAuth()
@@ -12,15 +13,27 @@ export default function BrandBible() {
 
   // local editable copies for free-text sections
   const [manifesto, setManifesto] = useState('')
-  const [typography, setTypography] = useState('')
+  const [heading, setHeading] = useState('')
+  const [bodyFont, setBodyFont] = useState('')
+  const [typoNotes, setTypoNotes] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const typoEmpty = !heading && !bodyFont && !typoNotes
+  const typography = typoEmpty ? '' : JSON.stringify({ heading, body: bodyFont, notes: typoNotes })
 
   const load = useCallback(async () => {
     const [b, c] = await Promise.all([
       supabase.from('brand_bible').select('*').eq('id', 1).single(),
       supabase.from('palette_colors').select('*').order('position').order('created_at'),
     ])
-    if (b.data) { setBible(b.data); setManifesto(b.data.manifesto || ''); setTypography(b.data.typography || '') }
+    if (b.data) {
+      setBible(b.data); setManifesto(b.data.manifesto || '')
+      let h = '', bo = '', no = ''
+      try { const t = JSON.parse(b.data.typography || ''); if (t && typeof t === 'object') { h = t.heading || ''; bo = t.body || ''; no = t.notes || '' } else { no = b.data.typography || '' } }
+      catch { no = b.data.typography || '' }
+      setHeading(h); setBodyFont(bo); setTypoNotes(no)
+      if (h) loadFont(h); if (bo) loadFont(bo)
+    }
     setColors(c.data || [])
     setLoading(false)
   }, [])
@@ -90,10 +103,11 @@ export default function BrandBible() {
         </Section>
 
         {/* Typography */}
-        <Section icon="brand" title="Typography">
-          <textarea className="input min-h-[90px]"
-            placeholder="Fonts and how to use them — e.g. Headlines: Fraunces. Body: Inter."
-            value={typography} onChange={(e) => setTypography(e.target.value)} />
+        <Section icon="type" title="Typography">
+          <FontPicker heading={heading} body={bodyFont} onHeading={setHeading} onBody={setBodyFont} />
+          <textarea className="input min-h-[70px] mt-3"
+            placeholder="Usage notes — e.g. Headlines in caps, body at 16px…"
+            value={typoNotes} onChange={(e) => setTypoNotes(e.target.value)} />
         </Section>
 
         {/* Taglines */}
@@ -102,6 +116,35 @@ export default function BrandBible() {
             onChange={(v) => patch({ taglines: v })} placeholder="Add a tagline idea" big />
         </Section>
       </div>
+    </div>
+  )
+}
+
+function FontPicker({ heading, body, onHeading, onBody }) {
+  useEffect(() => { if (heading) loadFont(heading); if (body) loadFont(body) }, [heading, body])
+  const Select = ({ value, onChange, label }) => (
+    <div className="flex-1">
+      <label className="label">{label}</label>
+      <select className="input" value={value} onChange={(e) => { loadFont(e.target.value); onChange(e.target.value) }}>
+        <option value="">— pick a font —</option>
+        {GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+      </select>
+    </div>
+  )
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Select value={heading} onChange={onHeading} label="Headings" />
+        <Select value={body} onChange={onBody} label="Body" />
+      </div>
+      {(heading || body) && (
+        <div className="rounded-xl border border-line bg-canvas p-4 mt-3">
+          <p className="text-3xl leading-tight" style={{ fontFamily: heading ? `'${heading}'` : 'inherit' }}>{heading || 'Headline font'}</p>
+          <p className="text-sm mt-2 text-muted" style={{ fontFamily: body ? `'${body}'` : 'inherit' }}>
+            {body ? `${body} — ` : ''}The quick brown fox jumps over the lazy dog. 0123456789
+          </p>
+        </div>
+      )}
     </div>
   )
 }

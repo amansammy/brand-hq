@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Icon } from '../lib/icons.jsx'
 import { Avatar } from './ui.jsx'
+import NotificationBell from './NotificationBell.jsx'
+import SearchOverlay from './SearchOverlay.jsx'
+import ProfileSettings from './ProfileSettings.jsx'
 import { useAuth } from '../lib/auth.jsx'
 
 const GROUPS = [
@@ -14,6 +17,7 @@ const GROUPS = [
       { to: '/tasks', label: 'Tasks', icon: 'tasks' },
       { to: '/files', label: 'Files', icon: 'files' },
       { to: '/notes', label: 'Notes', icon: 'notes' },
+      { to: '/budget', label: 'Budget', icon: 'wallet' },
     ],
   },
   {
@@ -34,7 +38,17 @@ export default function Layout() {
   const { user, profiles, signOut } = useAuth()
   const [moreOpen, setMoreOpen] = useState(false)
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const loc = useLocation()
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen(true) }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   function toggleTheme() {
     const next = !dark
@@ -53,6 +67,12 @@ export default function Layout() {
           <div className="h-9 w-9 rounded-xl bg-ink text-canvas flex items-center justify-center font-display text-lg">B</div>
           <span className="font-display text-lg tracking-tight">Brand HQ</span>
         </div>
+
+        <button onClick={() => setSearchOpen(true)}
+          className="flex items-center gap-3 px-3 py-2 mb-4 rounded-xl text-sm text-muted hover:text-ink hover:bg-canvas w-full border border-line">
+          <Icon name="search" size={17} /> <span className="flex-1 text-left">Search</span>
+          <kbd className="text-[10px] text-faint border border-line rounded px-1">⌘K</kbd>
+        </button>
 
         <nav className="flex flex-col gap-5 overflow-y-auto">
           {GROUPS.map((g) => (
@@ -74,21 +94,20 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="mt-auto pt-4 border-t border-line space-y-3">
+        <div className="mt-auto pt-4 border-t border-line space-y-2">
+          <NotificationBell variant="sidebar" />
           <button onClick={toggleTheme}
             className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-muted hover:text-ink hover:bg-canvas w-full transition-colors">
             <Icon name={dark ? 'sun' : 'moon'} size={18} />
             {dark ? 'Light mode' : 'Dark mode'}
           </button>
-          <div className="flex items-center gap-3 px-1">
+          <button onClick={() => setProfileOpen(true)} className="flex items-center gap-3 px-1 w-full text-left hover:opacity-80">
             <Avatar profile={me} size={36} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium truncate">{me.display_name}</p>
-              <button onClick={signOut} className="text-xs text-faint hover:text-accent flex items-center gap-1">
-                <Icon name="logout" size={13} /> Sign out
-              </button>
+              <p className="text-xs text-faint flex items-center gap-1"><Icon name="settings" size={12} /> Profile &amp; settings</p>
             </div>
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -99,8 +118,10 @@ export default function Layout() {
           <span className="font-display text-base">Brand HQ</span>
         </div>
         <div className="flex items-center gap-1">
+          <button onClick={() => setSearchOpen(true)} className="p-2 text-muted hover:text-ink rounded-lg"><Icon name="search" size={19} /></button>
+          <NotificationBell variant="icon" />
           <button onClick={toggleTheme} className="p-2 text-muted hover:text-ink rounded-lg"><Icon name={dark ? 'sun' : 'moon'} size={19} /></button>
-          <button onClick={signOut}><Avatar profile={me} size={30} /></button>
+          <button onClick={() => setProfileOpen(true)}><Avatar profile={me} size={30} /></button>
         </div>
       </header>
 
@@ -149,6 +170,9 @@ export default function Layout() {
           </div>
         </div>
       )}
+
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {profileOpen && <ProfileSettings onClose={() => setProfileOpen(false)} />}
     </div>
   )
 }
