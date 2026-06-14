@@ -24,8 +24,10 @@ const GROUPS = [
     label: 'Brand',
     items: [
       { to: '/brand', label: 'Brand bible', icon: 'brand' },
+      { to: '/studio', label: 'Design studio', icon: 'wand' },
       { to: '/arena', label: 'Logo arena', icon: 'trophy' },
       { to: '/mood', label: 'Mood', icon: 'mood' },
+      { to: '/suppliers', label: 'Suppliers', icon: 'factory' },
     ],
   },
 ]

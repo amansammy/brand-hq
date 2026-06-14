@@ -42,6 +42,10 @@ const P = {
   type: <><path d="M4 7V5h16v2M9 5v14M7 19h4" /><path d="M15 13v-2h6v2M18 11v8M16.5 19h3" /></>,
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   moon: <><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></>,
+  wand: <><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2Z" /><path d="M3 21 14 10" /><path d="m18 13 .7 1.4 1.3.6-1.3.6L18 17l-.7-1.4-1.3-.6 1.3-.6.7-1.4Z" /></>,
+  factory: <><path d="M3 21V9l6 4V9l6 4V5h6v16H3Z" /><path d="M9 21v-4M15 21v-4" /></>,
+  grid2: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
+  star2: <><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19l1-5.8L3.5 9.2l5.9-.9L12 3Z" /></>,
 }
 
 export function Icon({ name, size = 20, className = '', strokeWidth = 1.8, ...rest }) {

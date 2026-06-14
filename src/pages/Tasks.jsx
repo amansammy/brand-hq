@@ -13,7 +13,37 @@ import { getLinksFrom, syncLinks } from '../lib/links.js'
 import { notify } from '../lib/notify.js'
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate, todayISO } from '../lib/util.js'
-import { isPast, isToday, parseISO } from 'date-fns'
+import { isPast, isToday, parseISO, addDays, format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths } from 'date-fns'
+
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+// Natural-language quick-add: "design tee friday !high @aman" -> fields
+function parseQuickAdd(text, profiles) {
+  let t = ` ${text} `
+  let priority = null, assignee = null, due = null
+  const pm = t.match(/\s!(high|med|low)\b/i)
+  if (pm) { priority = pm[1].toLowerCase(); t = t.replace(pm[0], ' ') }
+  if (!priority && /\burgent\b/i.test(t)) { priority = 'high'; t = t.replace(/\burgent\b/i, ' ') }
+  const am = t.match(/\s@(\w+)/)
+  if (am) { const p = profiles.find((p) => (p.display_name || '').toLowerCase().startsWith(am[1].toLowerCase())); if (p) { assignee = p.id; t = t.replace(am[0], ' ') } }
+  const lower = t.toLowerCase()
+  const setDue = (d) => { due = format(d, 'yyyy-MM-dd') }
+  if (/\btoday\b/.test(lower)) { setDue(new Date()); t = t.replace(/\btoday\b/i, ' ') }
+  else if (/\btomorrow\b/.test(lower)) { setDue(addDays(new Date(), 1)); t = t.replace(/\btomorrow\b/i, ' ') }
+  else {
+    const inm = lower.match(/\bin (\d+) days?\b/)
+    if (inm) { setDue(addDays(new Date(), parseInt(inm[1], 10))); t = t.replace(inm[0], ' ') }
+    else {
+      for (let i = 0; i < 7; i++) {
+        if (new RegExp(`\\b${WEEKDAYS[i]}\\b`).test(lower)) {
+          const cur = new Date().getDay(); let diff = (i - cur + 7) % 7; if (diff === 0) diff = 7
+          setDue(addDays(new Date(), diff)); t = t.replace(new RegExp(`\\b${WEEKDAYS[i]}\\b`, 'i'), ' '); break
+        }
+      }
+    }
+  }
+  return { title: t.replace(/\s+/g, ' ').trim(), priority: priority || 'med', assignee, due_date: due }
+}
 
 const COLUMNS = [
   { key: 'todo', label: 'To-do' },
@@ -43,6 +73,7 @@ export default function Tasks() {
   const [editing, setEditing] = useState(null)
   const [activeId, setActiveId] = useState(null)
   const [view, setView] = useState('board')
+  const [defaultDue, setDefaultDue] = useState(null)
   const [q, setQ] = useState('')
   const [fAssignee, setFAssignee] = useState('')
   const [fPriority, setFPriority] = useState('')
@@ -123,6 +154,8 @@ export default function Tasks() {
   }
 
   const activeTask = tasks.find((t) => t.id === activeId)
+  const incompleteIds = new Set(tasks.filter((t) => t.status !== 'done').map((t) => t.id))
+  const blockedIds = new Set(tasks.filter((t) => (t.depends_on || []).some((id) => incompleteIds.has(id))).map((t) => t.id))
   if (loading) return <Spinner />
 
   return (
@@ -173,6 +206,7 @@ export default function Tasks() {
         <div className="flex rounded-lg border border-line-strong overflow-hidden">
           <button onClick={() => setView('board')} className={`h-10 px-3 text-sm flex items-center gap-1.5 ${view === 'board' ? 'bg-accent-soft text-accent' : 'text-muted'}`}><Icon name="tasks" size={15} /> Board</button>
           <button onClick={() => setView('list')} className={`h-10 px-3 text-sm flex items-center gap-1.5 border-l border-line-strong ${view === 'list' ? 'bg-accent-soft text-accent' : 'text-muted'}`}><Icon name="feed" size={15} /> List</button>
+          <button onClick={() => setView('calendar')} className={`h-10 px-3 text-sm flex items-center gap-1.5 border-l border-line-strong ${view === 'calendar' ? 'bg-accent-soft text-accent' : 'text-muted'}`}><Icon name="calendar" size={15} /> Calendar</button>
         </div>
       </div>
 
@@ -184,26 +218,31 @@ export default function Tasks() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {COLUMNS.map((col) => (
               <Column key={col.key} col={col} tasks={filtered.filter((t) => t.status === col.key)}
-                byId={byId} linkCounts={linkCounts} onOpen={setEditing} onQuickAdd={async (title) => {
-                  const { data } = await supabase.from('tasks').insert({ title, status: col.key, created_by: user.id }).select().single()
-                  if (data) logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${title}`, meta: { title } })
+                byId={byId} linkCounts={linkCounts} blockedIds={blockedIds} onOpen={setEditing} onQuickAdd={async (text) => {
+                  const p = parseQuickAdd(text, profiles)
+                  const { data } = await supabase.from('tasks').insert({ title: p.title, status: col.key, priority: p.priority, assignee: p.assignee, due_date: p.due_date, created_by: user.id }).select().single()
+                  if (data) logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${p.title}`, meta: { title: p.title } })
                 }} />
             ))}
           </div>
           <DragOverlay>{activeTask ? <TaskCard task={activeTask} byId={byId} overlay /> : null}</DragOverlay>
         </DndContext>
+      ) : view === 'list' ? (
+        <ListView tasks={filtered} byId={byId} blockedIds={blockedIds} onOpen={setEditing} />
       ) : (
-        <ListView tasks={filtered} byId={byId} onOpen={setEditing} onStatus={setStatus} />
+        <CalendarView tasks={filtered} milestones={milestones} byId={byId}
+          onOpen={setEditing} onAddOnDay={(d) => { setDefaultDue(d); setEditing('new') }} />
       )}
 
       {editing && <TaskModal task={editing === 'new' ? null : editing} profiles={profiles} user={user}
+        allTasks={tasks} defaultDue={defaultDue}
         allLabels={[...new Set(tasks.flatMap((t) => t.labels || []))]}
-        onClose={closeEditor} onDelete={removeTask} />}
+        onClose={() => { closeEditor(); setDefaultDue(null) }} onDelete={removeTask} />}
     </div>
   )
 }
 
-function Column({ col, tasks, byId, linkCounts, onOpen, onQuickAdd }) {
+function Column({ col, tasks, byId, linkCounts, blockedIds, onOpen, onQuickAdd }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
   const [adding, setAdding] = useState(false)
   const [val, setVal] = useState('')
@@ -214,7 +253,7 @@ function Column({ col, tasks, byId, linkCounts, onOpen, onQuickAdd }) {
         <span className="text-xs text-faint bg-canvas border border-line rounded-full px-2 py-0.5">{tasks.length}</span>
       </div>
       <div ref={setNodeRef} className={`space-y-2.5 min-h-[80px] rounded-xl transition-colors ${isOver ? 'bg-accent-soft/40 outline outline-2 outline-dashed outline-accent/30' : ''}`}>
-        {tasks.map((t) => <DraggableCard key={t.id} task={t} byId={byId} links={linkCounts[t.id] || 0} onOpen={onOpen} />)}
+        {tasks.map((t) => <DraggableCard key={t.id} task={t} byId={byId} links={linkCounts[t.id] || 0} blocked={blockedIds?.has(t.id)} onOpen={onOpen} />)}
       </div>
       {adding ? (
         <form onSubmit={(e) => { e.preventDefault(); if (val.trim()) { onQuickAdd(val.trim()); setVal(''); setAdding(false) } }} className="mt-2">
@@ -228,17 +267,17 @@ function Column({ col, tasks, byId, linkCounts, onOpen, onQuickAdd }) {
   )
 }
 
-function DraggableCard({ task, byId, links, onOpen }) {
+function DraggableCard({ task, byId, links, blocked, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id })
   const style = { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.4 : 1 }
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={() => onOpen(task)}>
-      <TaskCard task={task} byId={byId} links={links} />
+      <TaskCard task={task} byId={byId} links={links} blocked={blocked} />
     </div>
   )
 }
 
-function TaskCard({ task, byId, overlay, links = 0 }) {
+function TaskCard({ task, byId, overlay, links = 0, blocked }) {
   const a = byId(task.assignee)
   const ds = dueState(task.due_date, task.status)
   const subs = task.subtasks || []
@@ -263,6 +302,9 @@ function TaskCard({ task, byId, overlay, links = 0 }) {
           {links > 0 && (
             <span className="chip h-5 px-1.5 bg-accent-soft text-accent"><Icon name="link" size={11} /> {links}</span>
           )}
+          {blocked && task.status !== 'done' && (
+            <span className="chip h-5 px-1.5 bg-amber-50 text-amber-700" title="Blocked by an unfinished task"><Icon name="clock" size={11} /> Blocked</span>
+          )}
         </div>
         {task.due_date && (
           <span className={`chip h-5 px-1.5 ${ds === 'over' ? 'bg-accent-soft text-accent' : ds === 'today' ? 'bg-amber-50 text-amber-700' : 'bg-canvas border border-line text-faint'}`}>
@@ -274,36 +316,111 @@ function TaskCard({ task, byId, overlay, links = 0 }) {
   )
 }
 
-function ListView({ tasks, byId, onOpen, onStatus }) {
+function ListView({ tasks, byId, blockedIds, onOpen }) {
+  const [groupBy, setGroupBy] = useState('none')
+  const groups = (() => {
+    if (groupBy === 'none') return [{ key: 'all', label: null, items: tasks }]
+    if (groupBy === 'priority') return ['high', 'med', 'low'].map((p) => ({ key: p, label: PRIORITY[p].label, items: tasks.filter((t) => (t.priority || 'med') === p) })).filter((g) => g.items.length)
+    if (groupBy === 'assignee') {
+      const ids = [...new Set(tasks.map((t) => t.assignee || 'none'))]
+      return ids.map((id) => ({ key: id, label: id === 'none' ? 'Unassigned' : (byId(id)?.display_name || '…'), items: tasks.filter((t) => (t.assignee || 'none') === id) }))
+    }
+    return COLUMNS.map((c) => ({ key: c.key, label: c.label, items: tasks.filter((t) => t.status === c.key) })).filter((g) => g.items.length)
+  })()
+
+  const Row = (t) => {
+    const a = byId(t.assignee)
+    const ds = dueState(t.due_date, t.status)
+    return (
+      <button key={t.id} onClick={() => onOpen(t)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas transition-colors">
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: PRIORITY[t.priority || 'med'].dot }} />
+        <span className={`text-sm font-medium flex-1 truncate ${t.status === 'done' ? 'line-through text-faint' : ''}`}>{t.title}</span>
+        {blockedIds?.has(t.id) && t.status !== 'done' && <span className="chip h-5 px-1.5 bg-amber-50 text-amber-700">Blocked</span>}
+        {t.labels?.slice(0, 2).map((l) => <span key={l} className="chip h-5 px-1.5 bg-canvas border border-line text-faint hidden sm:flex">{l}</span>)}
+        {t.due_date && <span className={`text-xs hidden sm:inline ${ds === 'over' ? 'text-accent' : ds === 'today' ? 'text-amber-700' : 'text-faint'}`}>{prettyDate(t.due_date)}</span>}
+        <span className="chip h-6 px-2 bg-canvas border border-line text-muted">{COLUMNS.find((c) => c.key === t.status)?.label}</span>
+        {a ? <Avatar profile={a} size={24} /> : <span className="h-6 w-6 rounded-full bg-canvas border border-line shrink-0" />}
+      </button>
+    )
+  }
+
   return (
-    <div className="card divide-y divide-line">
-      {tasks.map((t) => {
-        const a = byId(t.assignee)
-        const ds = dueState(t.due_date, t.status)
-        return (
-          <button key={t.id} onClick={() => onOpen(t)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-canvas transition-colors">
-            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: PRIORITY[t.priority || 'med'].dot }} />
-            <span className={`text-sm font-medium flex-1 truncate ${t.status === 'done' ? 'line-through text-faint' : ''}`}>{t.title}</span>
-            {t.labels?.slice(0, 2).map((l) => <span key={l} className="chip h-5 px-1.5 bg-canvas border border-line text-faint hidden sm:flex">{l}</span>)}
-            {t.due_date && <span className={`text-xs hidden sm:inline ${ds === 'over' ? 'text-accent' : ds === 'today' ? 'text-amber-700' : 'text-faint'}`}>{prettyDate(t.due_date)}</span>}
-            <span className="chip h-6 px-2 bg-canvas border border-line text-muted">{COLUMNS.find((c) => c.key === t.status)?.label}</span>
-            {a ? <Avatar profile={a} size={24} /> : <span className="h-6 w-6 rounded-full bg-canvas border border-line shrink-0" />}
-          </button>
-        )
-      })}
+    <div>
+      <div className="flex items-center gap-2 mb-3 text-sm">
+        <span className="text-muted">Group by</span>
+        <select className="input w-auto h-9" value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+          <option value="none">None</option><option value="status">Status</option>
+          <option value="assignee">Assignee</option><option value="priority">Priority</option>
+        </select>
+      </div>
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <div key={g.key}>
+            {g.label && <p className="text-xs font-semibold uppercase tracking-wider text-faint px-1 mb-1.5">{g.label} · {g.items.length}</p>}
+            <div className="card divide-y divide-line">{g.items.map(Row)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
+function CalendarView({ tasks, milestones, byId, onOpen, onAddOnDay }) {
+  const [month, setMonth] = useState(() => startOfMonth(new Date()))
+  const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(month)), end: endOfWeek(endOfMonth(month)) })
+  const tasksOn = (d) => tasks.filter((t) => t.due_date && isSameDay(parseISO(t.due_date), d))
+  const msOn = (d) => milestones.filter((m) => m.due_date && isSameDay(parseISO(m.due_date), d))
+
+  return (
+    <div className="card p-3 sm:p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-lg">{format(month, 'MMMM yyyy')}</h3>
+        <div className="flex gap-1">
+          <button onClick={() => setMonth(addMonths(month, -1))} className="btn btn-soft h-8 w-8 px-0">‹</button>
+          <button onClick={() => setMonth(startOfMonth(new Date()))} className="btn btn-soft h-8 px-3 text-xs">Today</button>
+          <button onClick={() => setMonth(addMonths(month, 1))} className="btn btn-soft h-8 w-8 px-0">›</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-px text-center text-[11px] text-faint mb-1">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => <div key={d}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d) => {
+          const inMonth = isSameMonth(d, month)
+          const ts = tasksOn(d), ms = msOn(d)
+          return (
+            <div key={d.toISOString()} onClick={() => onAddOnDay(format(d, 'yyyy-MM-dd'))}
+              className={`min-h-[76px] rounded-lg border p-1 cursor-pointer transition-colors ${inMonth ? 'border-line hover:border-line-strong' : 'border-transparent opacity-40'} ${isToday(d) ? 'bg-accent-soft/40 border-accent/40' : ''}`}>
+              <div className="text-[11px] text-faint text-right pr-0.5">{format(d, 'd')}</div>
+              <div className="space-y-0.5 mt-0.5">
+                {ms.map((m) => <div key={m.id} className="text-[10px] px-1 py-0.5 rounded bg-accent text-white truncate">⚑ {m.title}</div>)}
+                {ts.slice(0, 3).map((t) => (
+                  <div key={t.id} onClick={(e) => { e.stopPropagation(); onOpen(t) }}
+                    className="text-[10px] px-1 py-0.5 rounded bg-canvas border border-line truncate flex items-center gap-1 hover:border-line-strong">
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: PRIORITY[t.priority || 'med'].dot }} />
+                    <span className={`truncate ${t.status === 'done' ? 'line-through text-faint' : ''}`}>{t.title}</span>
+                  </div>
+                ))}
+                {ts.length > 3 && <div className="text-[10px] text-faint px-1">+{ts.length - 3} more</div>}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TaskModal({ task, profiles, user, allLabels, allTasks = [], defaultDue, onClose, onDelete }) {
   const [title, setTitle] = useState(task?.title || '')
   const [description, setDescription] = useState(task?.description || '')
   const [assignee, setAssignee] = useState(task?.assignee || '')
-  const [dueDate, setDueDate] = useState(task?.due_date || '')
+  const [dueDate, setDueDate] = useState(task?.due_date || defaultDue || '')
   const [status, setStatus] = useState(task?.status || 'todo')
   const [priority, setPriority] = useState(task?.priority || 'med')
   const [labels, setLabels] = useState(task?.labels || [])
   const [subtasks, setSubtasks] = useState(task?.subtasks || [])
+  const [depends, setDepends] = useState(task?.depends_on || [])
   const [labelInput, setLabelInput] = useState('')
   const [subInput, setSubInput] = useState('')
   const [links, setLinks] = useState([])
@@ -321,7 +438,7 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
     if (!title.trim()) return
     setSaving(true)
     const payload = { title: title.trim(), description: description.trim() || null, assignee: assignee || null,
-      due_date: dueDate || null, status, priority, labels, subtasks }
+      due_date: dueDate || null, status, priority, labels, subtasks, depends_on: depends }
     let taskId = task?.id
     if (task) await supabase.from('tasks').update(payload).eq('id', task.id)
     else {
@@ -408,6 +525,28 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
             <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!subInput.trim()}><Icon name="plus" size={15} /></button>
           </form>
         </div>
+
+        {/* Blocked by */}
+        {allTasks.length > 0 && (
+          <div><label className="label">Blocked by</label>
+            <div className={`flex flex-wrap gap-1.5 ${depends.length ? 'mb-2' : ''}`}>
+              {depends.map((id) => {
+                const dt = allTasks.find((t) => t.id === id)
+                if (!dt) return null
+                return (
+                  <span key={id} className="chip h-6 px-2 bg-canvas border border-line text-muted">
+                    <Icon name="clock" size={11} /> {dt.title}
+                    <button onClick={() => setDepends(depends.filter((x) => x !== id))} className="text-faint hover:text-accent"><Icon name="close" size={11} /></button>
+                  </span>
+                )
+              })}
+            </div>
+            <select className="input h-9 text-sm" value="" onChange={(e) => { if (e.target.value) setDepends([...new Set([...depends, e.target.value])]) }}>
+              <option value="">Add a blocking task…</option>
+              {allTasks.filter((t) => t.id !== task?.id && !depends.includes(t.id)).map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+            </select>
+          </div>
+        )}
 
         {/* Links */}
         <div><label className="label">Related to</label>

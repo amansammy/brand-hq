@@ -3,16 +3,27 @@ import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
+import { extractPalette } from '../lib/color.js'
 
 export default function Moodboard() {
   const { user } = useAuth()
   const [items, setItems] = useState([])
+  const [boards, setBoards] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activeBoard, setActiveBoard] = useState('all')
+  const [tagFilter, setTagFilter] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [lightbox, setLightbox] = useState(null) // index into filtered
+  const [dragOver, setDragOver] = useState(false)
+  const [newBoard, setNewBoard] = useState(false)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('moodboard_items').select('*').order('created_at', { ascending: false })
-    setItems(data || [])
+    const [it, bd] = await Promise.all([
+      supabase.from('moodboard_items').select('*').order('created_at', { ascending: false }),
+      supabase.from('boards').select('*').order('created_at'),
+    ])
+    setItems(it.data || [])
+    setBoards(bd.data || [])
     setLoading(false)
   }, [])
 
@@ -20,63 +31,189 @@ export default function Moodboard() {
     load()
     const ch = supabase.channel('mood')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'moodboard_items' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'boards' }, load)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
+
+  // Paste image from clipboard → upload to current board
+  useEffect(() => {
+    const onPaste = (e) => {
+      const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'))
+      if (files.length) { e.preventDefault(); uploadFiles(files) }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  })
+
+  const boardId = activeBoard === 'all' ? null : activeBoard
+  const filtered = items.filter((it) =>
+    (activeBoard === 'all' || it.board_id === activeBoard) &&
+    (!tagFilter || (it.tags || []).includes(tagFilter)))
+  const allTags = [...new Set(items.flatMap((it) => it.tags || []))]
+
+  async function uploadFiles(files) {
+    for (const file of files) {
+      try {
+        const safe = file.name.replace(/[^\w.\-]+/g, '_')
+        const path = `${user.id}/${Date.now()}-${safe}`
+        const { error } = await supabase.storage.from('moodboard').upload(path, file)
+        if (error) throw error
+        const pub = supabase.storage.from('moodboard').getPublicUrl(path).data.publicUrl
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'image', url: pub, storage_path: path, board_id: boardId, created_by: user.id }).select().single()
+        logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: data?.id, summary: 'pinned to the mood board', meta: { thumb_url: pub } })
+      } catch (e) { /* skip */ }
+    }
+  }
 
   async function remove(item) {
     if (item.storage_path) await supabase.storage.from('moodboard').remove([item.storage_path])
     await supabase.from('moodboard_items').delete().eq('id', item.id)
     await purgeEntity('moodboard', item.id)
-    load()
+    setLightbox(null); load()
+  }
+  async function updateTags(item, tags) {
+    await supabase.from('moodboard_items').update({ tags }).eq('id', item.id)
+    setItems((cur) => cur.map((x) => x.id === item.id ? { ...x, tags } : x))
+  }
+  async function createBoard(name) {
+    if (!name?.trim()) return
+    const { data } = await supabase.from('boards').insert({ name: name.trim(), created_by: user.id }).select().single()
+    setNewBoard(false); if (data) setActiveBoard(data.id)
+  }
+  async function addPaletteFromImage(item) {
+    try {
+      const hexes = await extractPalette(item.url, 5)
+      if (!hexes.length) return alert('Could not read colors from this image.')
+      await supabase.from('palette_colors').insert(hexes.map((hex) => ({ hex, created_by: user.id })))
+      alert(`Added ${hexes.length} colours to your Brand Bible palette.`)
+    } catch (e) {
+      alert('Color extraction failed (the image may block cross-origin reads). Try an uploaded image.')
+    }
   }
 
   if (loading) return <Spinner />
 
   return (
-    <div>
-      <PageHeader title="Mood board" subtitle="Pin inspiration — images, references, links."
+    <div
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = [...e.dataTransfer.files].filter((x) => x.type.startsWith('image/')); if (f.length) uploadFiles(f) }}
+    >
+      <PageHeader title="Mood board" subtitle="Boards of inspiration — drag, paste, or generate. Pull colors into your palette."
         action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add</button>} />
 
-      {items.length === 0 ? (
+      {/* Board tabs */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-4">
+        <BoardTab active={activeBoard === 'all'} onClick={() => setActiveBoard('all')}>All</BoardTab>
+        {boards.map((b) => <BoardTab key={b.id} active={activeBoard === b.id} onClick={() => setActiveBoard(b.id)}>{b.name}</BoardTab>)}
+        {newBoard
+          ? <input autoFocus className="input h-8 w-36 text-sm" placeholder="Board name…"
+              onKeyDown={(e) => { if (e.key === 'Enter') createBoard(e.target.value); if (e.key === 'Escape') setNewBoard(false) }}
+              onBlur={(e) => e.target.value ? createBoard(e.target.value) : setNewBoard(false)} />
+          : <button onClick={() => setNewBoard(true)} className="chip h-8 px-3 border border-dashed border-line-strong text-faint hover:text-accent hover:border-accent"><Icon name="plus" size={13} /> Board</button>}
+      </div>
+
+      {/* Tag filter */}
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-4">
+          <Icon name="tag" size={14} className="text-faint" />
+          {allTags.map((t) => (
+            <button key={t} onClick={() => setTagFilter(tagFilter === t ? null : t)}
+              className={`chip h-6 px-2 border ${tagFilter === t ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted'}`}>{t}</button>
+          ))}
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
         <EmptyState icon="mood" title="Empty board"
-          subtitle="Drop in fabric shots, fits you love, color references, links — the visual language of the brand."
+          subtitle="Drop or paste images straight in, add links, search Unsplash, or generate art in the Studio. Tip: drag files anywhere here."
           action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add inspiration</button>} />
       ) : (
         <div className="columns-2 sm:columns-3 gap-4 [&>*]:mb-4">
-          {items.map((it) => (
-            <div key={it.id} className="card overflow-hidden break-inside-avoid group relative">
+          {filtered.map((it, i) => (
+            <div key={it.id} className="card overflow-hidden break-inside-avoid group relative cursor-zoom-in" onClick={() => setLightbox(i)}>
               {it.type === 'image' ? (
                 <img src={it.url} alt={it.caption || ''} className="w-full block" loading="lazy" />
               ) : (
-                <a href={it.url} target="_blank" rel="noreferrer"
-                  className="block hover:bg-accent-soft/30 transition-colors">
+                <div className="block">
                   {it.preview_image && <img src={it.preview_image} alt="" className="w-full block" loading="lazy" />}
                   <div className="p-4">
-                    <p className="text-sm font-medium break-words line-clamp-2 flex items-start gap-1.5">
-                      <Icon name="link" size={14} className="text-accent mt-0.5 shrink-0" />
-                      {it.title || it.url}
-                    </p>
-                    {it.title && <p className="text-xs text-faint truncate mt-1">{(() => { try { return new URL(it.url).hostname } catch { return it.url } })()}</p>}
+                    <p className="text-sm font-medium break-words line-clamp-2 flex items-start gap-1.5"><Icon name="link" size={14} className="text-accent mt-0.5 shrink-0" />{it.title || it.url}</p>
                   </div>
-                </a>
+                </div>
               )}
-              {it.caption && <p className="text-sm text-muted px-3 py-2">{it.caption}</p>}
-              <button onClick={() => remove(it)}
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Icon name="trash" size={14} />
-              </button>
+              {it.caption && it.type === 'image' && <p className="text-sm text-muted px-3 py-2">{it.caption}</p>}
+              {(it.tags?.length > 0) && <div className="px-3 pb-2 flex flex-wrap gap-1">{it.tags.map((t) => <span key={t} className="chip h-4 px-1.5 bg-canvas border border-line text-faint text-[10px]">{t}</span>)}</div>}
+              <button onClick={(e) => { e.stopPropagation(); remove(it) }}
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" size={14} /></button>
             </div>
           ))}
         </div>
       )}
 
-      {adding && <AddModal user={user} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load() }} />}
+      {dragOver && (
+        <div className="fixed inset-0 z-50 bg-accent/10 border-4 border-dashed border-accent grid place-items-center pointer-events-none">
+          <div className="card px-6 py-4 text-accent font-medium">Drop images to add them</div>
+        </div>
+      )}
+
+      {adding && <AddModal user={user} boardId={boardId} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load() }} />}
+      {lightbox !== null && filtered[lightbox] && (
+        <Lightbox item={filtered[lightbox]}
+          hasPrev={lightbox > 0} hasNext={lightbox < filtered.length - 1}
+          onPrev={() => setLightbox(lightbox - 1)} onNext={() => setLightbox(lightbox + 1)}
+          onClose={() => setLightbox(null)} onTags={updateTags} onPalette={addPaletteFromImage} onDelete={remove} />
+      )}
     </div>
   )
 }
 
-function AddModal({ user, onClose, onDone }) {
+function BoardTab({ active, onClick, children }) {
+  return <button onClick={onClick} className={`chip h-8 px-3 border ${active ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted hover:border-line-strong'}`}>{children}</button>
+}
+
+function Lightbox({ item, hasPrev, hasNext, onPrev, onNext, onClose, onTags, onPalette, onDelete }) {
+  const [tag, setTag] = useState('')
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); if (e.key === 'ArrowLeft' && hasPrev) onPrev(); if (e.key === 'ArrowRight' && hasNext) onNext() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [hasPrev, hasNext, onPrev, onNext, onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      {hasPrev && <button onClick={(e) => { e.stopPropagation(); onPrev() }} className="absolute left-3 z-10 h-10 w-10 rounded-full bg-white/15 text-white grid place-items-center hover:bg-white/25">‹</button>}
+      {hasNext && <button onClick={(e) => { e.stopPropagation(); onNext() }} className="absolute right-3 z-10 h-10 w-10 rounded-full bg-white/15 text-white grid place-items-center hover:bg-white/25">›</button>}
+      <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex-1 min-h-0 grid place-items-center mb-3">
+          {item.type === 'image'
+            ? <img src={item.url} alt="" className="max-h-[68vh] max-w-full object-contain rounded-xl" />
+            : <a href={item.url} target="_blank" rel="noreferrer" className="card p-6 text-center"><Icon name="link" size={24} className="text-accent mx-auto mb-2" /><p className="text-sm break-words">{item.title || item.url}</p></a>}
+        </div>
+        <div className="card p-3">
+          {item.caption && <p className="text-sm text-muted mb-2">{item.caption}</p>}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            {(item.tags || []).map((t) => (
+              <span key={t} className="chip h-6 px-2 bg-canvas border border-line text-muted">{t}
+                <button onClick={() => onTags(item, (item.tags || []).filter((x) => x !== t))} className="text-faint hover:text-accent"><Icon name="close" size={11} /></button></span>
+            ))}
+            <input className="input h-7 w-28 text-xs" placeholder="+ tag" value={tag} onChange={(e) => setTag(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && tag.trim()) { onTags(item, [...new Set([...(item.tags || []), tag.trim()])]); setTag('') } }} />
+          </div>
+          <div className="flex gap-2">
+            {item.type === 'image' && <button onClick={() => onPalette(item)} className="btn btn-soft h-8 text-xs"><Icon name="mood" size={14} /> Extract palette</button>}
+            <a href={item.url} target="_blank" rel="noreferrer" className="btn btn-soft h-8 text-xs"><Icon name="link" size={14} /> Open</a>
+            <button onClick={() => onDelete(item)} className="btn btn-soft h-8 text-xs text-accent ml-auto"><Icon name="trash" size={14} /> Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddModal({ user, boardId, onClose, onDone }) {
   const [tab, setTab] = useState('image')
   const [fileObj, setFileObj] = useState(null)
   const [url, setUrl] = useState('')
@@ -96,8 +233,7 @@ function AddModal({ user, onClose, onDone }) {
     setUloading(true)
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=12&query=${encodeURIComponent(uq)}`,
-          { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
+        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=12&query=${encodeURIComponent(uq)}`, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
         const j = await r.json()
         if (!cancel) setUresults(j.results || [])
       } catch (e) { if (!cancel) setUresults([]) }
@@ -109,13 +245,9 @@ function AddModal({ user, onClose, onDone }) {
   async function addUnsplash(photo) {
     setBusy(true); setErr('')
     try {
-      // Unsplash API guideline: register a "download" when a photo is used.
       try { if (photo.links?.download_location) fetch(`${photo.links.download_location}&client_id=${UNSPLASH_KEY}`) } catch (e) {}
       const credit = `Photo by ${photo.user?.name || 'Unsplash'} on Unsplash`
-      const { data } = await supabase.from('moodboard_items').insert({
-        type: 'image', url: photo.urls.regular, title: caption.trim() || credit,
-        caption: caption.trim() ? credit : null, created_by: user.id,
-      }).select().single()
+      const { data } = await supabase.from('moodboard_items').insert({ type: 'image', url: photo.urls.regular, title: caption.trim() || credit, caption: caption.trim() ? credit : null, board_id: boardId, created_by: user.id }).select().single()
       logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: data?.id, summary: 'pinned to the mood board', meta: { thumb_url: photo.urls.small } })
       onDone()
     } catch (e) { setErr(e.message); setBusy(false) }
@@ -133,7 +265,7 @@ function AddModal({ user, onClose, onDone }) {
         if (error) throw error
         const pub = supabase.storage.from('moodboard').getPublicUrl(path).data.publicUrl
         thumb = pub
-        const { data } = await supabase.from('moodboard_items').insert({ type: 'image', url: pub, storage_path: path, caption: caption.trim() || null, created_by: user.id }).select().single()
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'image', url: pub, storage_path: path, caption: caption.trim() || null, board_id: boardId, created_by: user.id }).select().single()
         row = data
       } else {
         if (!url.trim()) return
@@ -142,9 +274,9 @@ function AddModal({ user, onClose, onDone }) {
           const r = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url.trim())}`)
           const j = await r.json()
           if (j?.status === 'success') { title = j.data?.title || null; preview = j.data?.image?.url || j.data?.logo?.url || null }
-        } catch (e) { /* preview is best-effort */ }
+        } catch (e) {}
         thumb = preview
-        const { data } = await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), title, preview_image: preview, caption: caption.trim() || null, created_by: user.id }).select().single()
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), title, preview_image: preview, caption: caption.trim() || null, board_id: boardId, created_by: user.id }).select().single()
         row = data
       }
       logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: row?.id, summary: 'pinned to the mood board', meta: { thumb_url: thumb } })
@@ -156,29 +288,22 @@ function AddModal({ user, onClose, onDone }) {
 
   return (
     <Modal open onClose={onClose} title="Add to mood board"
-      footer={<>
-        <button onClick={onClose} className="btn btn-soft">Cancel</button>
-        {tab !== 'unsplash' && <button onClick={submit} className="btn btn-primary" disabled={!canSubmit || busy}>{busy ? 'Adding…' : 'Add'}</button>}
-      </>}>
+      footer={<><button onClick={onClose} className="btn btn-soft">Cancel</button>
+        {tab !== 'unsplash' && <button onClick={submit} className="btn btn-primary" disabled={!canSubmit || busy}>{busy ? 'Adding…' : 'Add'}</button>}</>}>
       <div className="flex gap-2 mb-4">
         <button onClick={() => setTab('image')} className={`btn flex-1 ${tab === 'image' ? 'btn-primary' : 'btn-soft'}`}><Icon name="image" size={16} /> Image</button>
         <button onClick={() => setTab('link')} className={`btn flex-1 ${tab === 'link' ? 'btn-primary' : 'btn-soft'}`}><Icon name="link" size={16} /> Link</button>
         {hasUnsplash && <button onClick={() => setTab('unsplash')} className={`btn flex-1 ${tab === 'unsplash' ? 'btn-primary' : 'btn-soft'}`}><Icon name="search" size={16} /> Unsplash</button>}
       </div>
 
-      {tab === 'image' && (
-        <>
-          <button type="button" onClick={() => inputRef.current?.click()}
-            className="w-full border border-dashed border-line-strong rounded-xl py-8 flex flex-col items-center gap-2 text-muted hover:border-accent hover:text-accent transition-colors">
-            <Icon name="upload" size={22} />
-            <span className="text-sm">{fileObj ? fileObj.name : 'Click to choose an image'}</span>
-          </button>
-          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => setFileObj(e.target.files?.[0] || null)} />
-        </>
-      )}
+      {tab === 'image' && (<>
+        <button type="button" onClick={() => inputRef.current?.click()} className="w-full border border-dashed border-line-strong rounded-xl py-8 flex flex-col items-center gap-2 text-muted hover:border-accent hover:text-accent transition-colors">
+          <Icon name="upload" size={22} /><span className="text-sm">{fileObj ? fileObj.name : 'Click to choose an image'}</span>
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => setFileObj(e.target.files?.[0] || null)} />
+      </>)}
       {tab === 'link' && (
-        <div>
-          <label className="label">URL</label>
+        <div><label className="label">URL</label>
           <input className="input" autoFocus placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
           <p className="text-xs text-faint mt-1">We'll fetch a title and preview image automatically.</p>
         </div>
@@ -189,8 +314,7 @@ function AddModal({ user, onClose, onDone }) {
           <div className="grid grid-cols-3 gap-2 mt-3 max-h-72 overflow-y-auto">
             {uloading && <p className="col-span-3 text-sm text-faint text-center py-6">Searching…</p>}
             {!uloading && uresults.map((p) => (
-              <button key={p.id} onClick={() => addUnsplash(p)} disabled={busy}
-                className="aspect-square rounded-lg overflow-hidden border border-line hover:border-accent">
+              <button key={p.id} onClick={() => addUnsplash(p)} disabled={busy} className="aspect-square rounded-lg overflow-hidden border border-line hover:border-accent">
                 <img src={p.urls.thumb} alt={p.alt_description || ''} className="h-full w-full object-cover" loading="lazy" />
               </button>
             ))}
@@ -200,10 +324,8 @@ function AddModal({ user, onClose, onDone }) {
       )}
 
       {tab !== 'unsplash' && (
-        <div className="mt-4">
-          <label className="label">Caption (optional)</label>
-          <input className="input" placeholder="Why it inspires you…" value={caption} onChange={(e) => setCaption(e.target.value)} />
-        </div>
+        <div className="mt-4"><label className="label">Caption (optional)</label>
+          <input className="input" placeholder="Why it inspires you…" value={caption} onChange={(e) => setCaption(e.target.value)} /></div>
       )}
       {err && <p className="text-sm text-accent mt-3">{err}</p>}
     </Modal>
