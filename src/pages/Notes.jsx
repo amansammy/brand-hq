@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase, logActivity } from '../lib/supabase.js'
+import { useSearchParams } from 'react-router-dom'
+import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -10,6 +11,7 @@ export default function Notes() {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
+  const [params, setParams] = useSearchParams()
   const byId = (id) => profiles.find((p) => p.id === id) || { id, display_name: 'Someone' }
 
   const load = useCallback(async () => {
@@ -17,6 +19,17 @@ export default function Notes() {
     setNotes(data || [])
     setLoading(false)
   }, [])
+
+  // Deep-link: /notes?open=<id>
+  useEffect(() => {
+    const id = params.get('open')
+    if (id && notes.length) {
+      const n = notes.find((x) => x.id === id)
+      if (n) setOpen(n)
+    }
+  }, [params, notes])
+
+  function closeEditor() { setOpen(null); if (params.get('open')) setParams({}, { replace: true }) }
 
   useEffect(() => {
     load()
@@ -29,7 +42,7 @@ export default function Notes() {
   async function create() {
     const { data } = await supabase.from('notes')
       .insert({ title: 'Untitled', content: '', updated_by: user.id }).select().single()
-    if (data) { logActivity({ verb: 'created', entity_type: 'note', entity_id: data.id, summary: 'started a new note' }); load(); setOpen(data) }
+    if (data) { logActivity({ verb: 'created', entity_type: 'note', entity_id: data.id, summary: 'started a new note', meta: { title: 'Untitled' } }); load(); setOpen(data) }
   }
 
   if (loading) return <Spinner />
@@ -59,7 +72,7 @@ export default function Notes() {
         </div>
       )}
 
-      {open && <NoteEditor note={open} user={user} onClose={() => setOpen(null)} onSaved={load} />}
+      {open && <NoteEditor note={open} user={user} onClose={closeEditor} onSaved={load} />}
     </div>
   )
 }
@@ -78,6 +91,7 @@ function NoteEditor({ note, user, onClose, onSaved }) {
   async function remove() {
     if (!confirm('Delete this note?')) return
     await supabase.from('notes').delete().eq('id', note.id)
+    await purgeEntity('note', note.id)
     onSaved(); onClose()
   }
 

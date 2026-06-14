@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, logActivity } from '../lib/supabase.js'
+import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -27,6 +27,7 @@ export default function Moodboard() {
   async function remove(item) {
     if (item.storage_path) await supabase.storage.from('moodboard').remove([item.storage_path])
     await supabase.from('moodboard_items').delete().eq('id', item.id)
+    await purgeEntity('moodboard', item.id)
     load()
   }
 
@@ -81,6 +82,7 @@ function AddModal({ user, onClose, onDone }) {
   async function submit() {
     setBusy(true); setErr('')
     try {
+      let row, thumb = null
       if (tab === 'image') {
         if (!fileObj) return
         const safe = fileObj.name.replace(/[^\w.\-]+/g, '_')
@@ -88,12 +90,15 @@ function AddModal({ user, onClose, onDone }) {
         const { error } = await supabase.storage.from('moodboard').upload(path, fileObj)
         if (error) throw error
         const pub = supabase.storage.from('moodboard').getPublicUrl(path).data.publicUrl
-        await supabase.from('moodboard_items').insert({ type: 'image', url: pub, storage_path: path, caption: caption.trim() || null, created_by: user.id })
+        thumb = pub
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'image', url: pub, storage_path: path, caption: caption.trim() || null, created_by: user.id }).select().single()
+        row = data
       } else {
         if (!url.trim()) return
-        await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), caption: caption.trim() || null, created_by: user.id })
+        const { data } = await supabase.from('moodboard_items').insert({ type: 'link', url: url.trim(), caption: caption.trim() || null, created_by: user.id }).select().single()
+        row = data
       }
-      logActivity({ verb: 'added', entity_type: 'moodboard', summary: 'pinned to the mood board' })
+      logActivity({ verb: 'added', entity_type: 'moodboard', entity_id: row?.id, summary: 'pinned to the mood board', meta: { thumb_url: thumb } })
       onDone()
     } catch (e) { setErr(e.message); setBusy(false) }
   }

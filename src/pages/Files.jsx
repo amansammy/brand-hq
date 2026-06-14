@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, logActivity } from '../lib/supabase.js'
+import { useSearchParams } from 'react-router-dom'
+import { supabase, logActivity, purgeEntity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui.jsx'
 import { Comments } from '../components/Discussion.jsx'
@@ -13,6 +14,7 @@ export default function Files() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null) // file id
   const [creating, setCreating] = useState(false)
+  const [params, setParams] = useSearchParams()
 
   const load = useCallback(async () => {
     const [f, v] = await Promise.all([
@@ -32,6 +34,14 @@ export default function Files() {
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
+
+  // Deep-link: /files?open=<id>
+  useEffect(() => {
+    const id = params.get('open')
+    if (id && files.some((f) => f.id === id)) setOpen(id)
+  }, [params, files])
+
+  function closeDetail() { setOpen(null); if (params.get('open')) setParams({}, { replace: true }) }
 
   const versionsFor = (fid) => versions.filter((v) => v.file_id === fid)
   if (loading) return <Spinner />
@@ -78,7 +88,7 @@ export default function Files() {
 
       {creating && <NewFileModal user={user} onClose={() => setCreating(false)} onDone={(id) => { setCreating(false); load().then(() => setOpen(id)) }} />}
       {open && <FileDetail fileId={open} file={files.find((f) => f.id === open)} versions={versionsFor(open)}
-        profiles={profiles} user={user} onClose={() => setOpen(null)} onChange={load} />}
+        profiles={profiles} user={user} onClose={closeDetail} onChange={load} />}
     </div>
   )
 }
@@ -111,7 +121,7 @@ function NewFileModal({ user, onClose, onDone }) {
         .insert({ name: name.trim(), description: description.trim() || null, created_by: user.id }).select().single()
       if (error) throw error
       await uploadVersion({ fileId: f.id, fileObj, versionNo: 1, note: null, userId: user.id })
-      logActivity({ verb: 'uploaded', entity_type: 'file', entity_id: f.id, summary: `added a file: ${f.name}` })
+      logActivity({ verb: 'uploaded', entity_type: 'file', entity_id: f.id, summary: `added a file: ${f.name}`, meta: { title: f.name } })
       onDone(f.id)
     } catch (e) { setErr(e.message); setBusy(false) }
   }
@@ -177,6 +187,7 @@ function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange 
   async function removeFile() {
     if (!confirm('Delete this file and all its versions?')) return
     await supabase.from('files').delete().eq('id', fileId)
+    await purgeEntity('file', fileId)
     onClose(); onChange()
   }
 

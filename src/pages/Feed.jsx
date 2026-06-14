@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase, logActivity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
+import { isAdmin, entityLink } from '../lib/config.js'
 import { Avatar, EmptyState, Spinner, PageHeader } from '../components/ui.jsx'
 import { Reactions, Comments } from '../components/Discussion.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -10,9 +12,16 @@ const VERB_ICON = {
   posted: 'feed', created: 'plus', updated: 'edit', uploaded: 'upload',
   completed: 'check', added: 'plus', deleted: 'trash',
 }
+const TYPE_ICON = {
+  task: 'tasks', file: 'files', note: 'notes', moodboard: 'mood',
+  collection: 'drops', garment: 'drops', arena: 'trophy', candidate: 'trophy',
+  brand_bible: 'brand', post: 'feed',
+}
 
 export default function Feed() {
   const { user, profiles } = useAuth()
+  const navigate = useNavigate()
+  const admin = isAdmin(user)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
@@ -31,8 +40,7 @@ export default function Feed() {
   useEffect(() => {
     load()
     const ch = supabase.channel('feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity' },
-        (payload) => setItems((cur) => [payload.new, ...cur.filter((i) => i.id !== payload.new.id)]))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity' }, load)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
@@ -45,9 +53,24 @@ export default function Feed() {
     setText(''); setPosting(false)
   }
 
+  async function removeItem(id) {
+    await supabase.from('activity').delete().eq('id', id)
+    setItems((cur) => cur.filter((i) => i.id !== id))
+  }
+  async function clearFeed() {
+    if (!confirm('Clear the entire activity feed? This removes all feed items (your notes, files, tasks etc. stay).')) return
+    await supabase.from('activity').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    setItems([])
+  }
+
   return (
     <div>
-      <PageHeader title="Feed" subtitle="Everything happening in the brand, as it happens." />
+      <PageHeader title="Feed" subtitle="Everything happening in the brand, as it happens."
+        action={admin && items.length > 0 && (
+          <button onClick={clearFeed} className="btn btn-ghost text-accent border-accent-soft">
+            <Icon name="trash" size={15} /> Clear feed
+          </button>
+        )} />
 
       {/* Composer */}
       <div className="card p-4 mb-6">
@@ -76,20 +99,41 @@ export default function Feed() {
           {items.map((a) => {
             const actor = byId(a.actor)
             const isPost = a.entity_type === 'post'
+            const link = isPost ? null : entityLink(a.entity_type, a.entity_id, a.meta || {})
+            const thumb = a.meta?.thumb_url
+            const goto = () => link && navigate(link)
             return (
-              <div key={a.id} className="card p-4 animate-in">
+              <div key={a.id} className="card p-4 animate-in group">
                 <div className="flex gap-3">
-                  <Avatar profile={actor} size={36} />
+                  {/* Thumbnail */}
+                  {!isPost && (
+                    <button onClick={goto} disabled={!link}
+                      className={`h-11 w-11 rounded-xl overflow-hidden shrink-0 border border-line grid place-items-center ${link ? 'cursor-pointer hover:border-line-strong' : ''} ${thumb ? '' : 'bg-accent-soft text-accent'}`}>
+                      {thumb
+                        ? <img src={thumb} alt="" className="h-full w-full object-cover" />
+                        : <Icon name={TYPE_ICON[a.entity_type] || 'feed'} size={20} />}
+                    </button>
+                  )}
+                  {isPost && <Avatar profile={actor} size={36} />}
+
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium">{actor.display_name}</span>
                       {!isPost && (
-                        <span className="text-sm text-muted flex items-center gap-1">
+                        <button onClick={goto} disabled={!link}
+                          className={`text-sm text-muted flex items-center gap-1 ${link ? 'hover:text-accent' : ''}`}>
                           <Icon name={VERB_ICON[a.verb] || 'feed'} size={14} className="text-faint" />
                           {a.summary}
-                        </span>
+                        </button>
                       )}
                       <span className="text-xs text-faint">· {timeAgo(a.created_at)}</span>
+                      {admin && (
+                        <button onClick={() => removeItem(a.id)}
+                          className="ml-auto opacity-0 group-hover:opacity-100 text-faint hover:text-accent transition-opacity"
+                          title="Remove from feed">
+                          <Icon name="close" size={15} />
+                        </button>
+                      )}
                     </div>
 
                     {isPost && a.body && (
@@ -101,11 +145,15 @@ export default function Feed() {
 
                     <div className="flex items-center gap-3 mt-3">
                       <Reactions entityType="activity" entityId={a.id} />
-                      <button
-                        onClick={() => setOpenComments((o) => ({ ...o, [a.id]: !o[a.id] }))}
+                      <button onClick={() => setOpenComments((o) => ({ ...o, [a.id]: !o[a.id] }))}
                         className="h-7 px-2 rounded-full text-xs flex items-center gap-1 text-muted hover:text-ink border border-line hover:border-line-strong">
                         <Icon name="comment" size={14} /> Comment
                       </button>
+                      {link && (
+                        <button onClick={goto} className="h-7 px-2 rounded-full text-xs flex items-center gap-1 text-muted hover:text-accent border border-line hover:border-line-strong">
+                          Open <Icon name="chevronDown" size={13} className="-rotate-90" />
+                        </button>
+                      )}
                     </div>
 
                     {openComments[a.id] && (

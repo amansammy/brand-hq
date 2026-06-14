@@ -10,6 +10,9 @@ import Tasks from './pages/Tasks.jsx'
 import Files from './pages/Files.jsx'
 import Notes from './pages/Notes.jsx'
 import Moodboard from './pages/Moodboard.jsx'
+import Drops from './pages/Drops.jsx'
+import Arena from './pages/Arena.jsx'
+import BrandBible from './pages/BrandBible.jsx'
 
 export default function App() {
   const { session, loading } = useAuth()
@@ -22,9 +25,12 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Feed />} />
+        <Route path="drops" element={<Drops />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="files" element={<Files />} />
         <Route path="notes" element={<Notes />} />
+        <Route path="brand" element={<BrandBible />} />
+        <Route path="arena" element={<Arena />} />
         <Route path="mood" element={<Moodboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
