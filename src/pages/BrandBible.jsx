@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase, logActivity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Spinner, PageHeader } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
-import { GOOGLE_FONTS, loadFont } from '../lib/fonts.js'
+import { FONTS, FONT_CATEGORIES, loadFont } from '../lib/fonts.js'
 
 export default function BrandBible() {
   const { user } = useAuth()
@@ -121,30 +121,78 @@ export default function BrandBible() {
 }
 
 function FontPicker({ heading, body, onHeading, onBody }) {
+  const [q, setQ] = useState('')
+  const [cat, setCat] = useState('all')
+  const [sample, setSample] = useState('Your brand name')
+
   useEffect(() => { if (heading) loadFont(heading); if (body) loadFont(body) }, [heading, body])
-  const Select = ({ value, onChange, label }) => (
-    <div className="flex-1">
-      <label className="label">{label}</label>
-      <select className="input" value={value} onChange={(e) => { loadFont(e.target.value); onChange(e.target.value) }}>
-        <option value="">— pick a font —</option>
-        {GOOGLE_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
-      </select>
-    </div>
-  )
+
+  const list = FONTS.filter((f) =>
+    (cat === 'all' || f.cat === cat) && (!q || f.name.toLowerCase().includes(q.toLowerCase())))
+
   return (
     <div>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Select value={heading} onChange={onHeading} label="Headings" />
-        <Select value={body} onChange={onBody} label="Body" />
+      {/* Selected preview */}
+      <div className="rounded-xl border border-line bg-canvas p-4 mb-3">
+        <p className="text-3xl leading-tight break-words" style={{ fontFamily: heading ? `'${heading}'` : 'inherit' }}>{sample || 'Your brand name'}</p>
+        <p className="text-sm mt-2 text-muted" style={{ fontFamily: body ? `'${body}'` : 'inherit' }}>
+          The quick brown fox jumps over the lazy dog — 0123456789
+        </p>
+        <p className="text-xs text-faint mt-2">
+          Heading: <span className="font-medium text-muted">{heading || '—'}</span> · Body: <span className="font-medium text-muted">{body || '—'}</span>
+        </p>
       </div>
-      {(heading || body) && (
-        <div className="rounded-xl border border-line bg-canvas p-4 mt-3">
-          <p className="text-3xl leading-tight" style={{ fontFamily: heading ? `'${heading}'` : 'inherit' }}>{heading || 'Headline font'}</p>
-          <p className="text-sm mt-2 text-muted" style={{ fontFamily: body ? `'${body}'` : 'inherit' }}>
-            {body ? `${body} — ` : ''}The quick brown fox jumps over the lazy dog. 0123456789
-          </p>
-        </div>
-      )}
+
+      {/* Controls */}
+      <div className="flex flex-col sm:flex-row gap-2 mb-2">
+        <input className="input h-9 text-sm flex-1 min-w-0" placeholder="Search fonts…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className="input h-9 text-sm flex-1 min-w-0" placeholder="Preview text" value={sample} onChange={(e) => setSample(e.target.value)} />
+      </div>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {FONT_CATEGORIES.map((c) => (
+          <button key={c.key} onClick={() => setCat(c.key)}
+            className={`chip h-7 px-2.5 border ${cat === c.key ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted'}`}>{c.label}</button>
+        ))}
+      </div>
+
+      {/* Gallery */}
+      <div className="border border-line rounded-xl divide-y divide-line max-h-80 overflow-y-auto">
+        {list.length === 0 && <p className="text-sm text-faint text-center py-8">No fonts match.</p>}
+        {list.map((f) => (
+          <FontRow key={f.name} font={f} sample={sample}
+            isHeading={heading === f.name} isBody={body === f.name}
+            onHeading={() => onHeading(f.name)} onBody={() => onBody(f.name)} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FontRow({ font, sample, isHeading, isBody, onHeading, onBody }) {
+  const ref = useRef(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ob = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { loadFont(font.name); setVisible(true); ob.disconnect() }
+    }, { rootMargin: '120px' })
+    ob.observe(el)
+    return () => ob.disconnect()
+  }, [font.name])
+
+  return (
+    <div ref={ref} className="flex items-center gap-3 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-xl leading-tight truncate" style={{ fontFamily: visible ? `'${font.name}'` : 'inherit' }}>
+          {sample || font.name}
+        </p>
+        <p className="text-[11px] text-faint">{font.name}</p>
+      </div>
+      <div className="flex gap-1 shrink-0">
+        <button onClick={onHeading} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isHeading ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Heading</button>
+        <button onClick={onBody} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isBody ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Body</button>
+      </div>
     </div>
   )
 }
