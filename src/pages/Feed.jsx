@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, logActivity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
@@ -102,8 +102,8 @@ export default function Feed() {
             const link = isPost ? null : entityLink(a.entity_type, a.entity_id, a.meta || {})
             const thumb = a.meta?.thumb_url
             const goto = () => link && navigate(link)
-            return (
-              <div key={a.id} className="card p-4 animate-in group">
+            const card = (
+              <div className="card p-4 animate-in group">
                 <div className="flex gap-3">
                   {/* Thumbnail */}
                   {!isPost && (
@@ -165,9 +165,61 @@ export default function Feed() {
                 </div>
               </div>
             )
+            return admin
+              ? <SwipeToDelete key={a.id} onDelete={() => removeItem(a.id)}>{card}</SwipeToDelete>
+              : <div key={a.id}>{card}</div>
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// iOS-style swipe-left to reveal/confirm delete (touch only; admin feed).
+function SwipeToDelete({ onDelete, children }) {
+  const [dx, setDx] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const st = useRef(null)
+  const REVEAL = 84, DEL = 200
+
+  function onStart(e) {
+    const t = e.touches[0]
+    st.current = { x: t.clientX, y: t.clientY, base: dx, axis: null }
+  }
+  function onMove(e) {
+    if (!st.current) return
+    const t = e.touches[0]
+    const ddx = t.clientX - st.current.x, ddy = t.clientY - st.current.y
+    if (st.current.axis === null) {
+      if (Math.abs(ddx) > 8 || Math.abs(ddy) > 8) st.current.axis = Math.abs(ddx) > Math.abs(ddy) ? 'x' : 'y'
+      else return
+    }
+    if (st.current.axis !== 'x') return
+    if (!dragging) setDragging(true)
+    let d = st.current.base + ddx
+    if (d > 0) d = 0
+    if (d < -(DEL + 40)) d = -(DEL + 40)
+    setDx(d)
+  }
+  function onEnd() {
+    if (!st.current) return
+    setDragging(false)
+    if (dx <= -DEL) onDelete()
+    else if (dx <= -REVEAL * 0.5) setDx(-REVEAL)
+    else setDx(0)
+    st.current = null
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl">
+      <button onClick={onDelete}
+        className="absolute inset-y-0 right-0 flex items-center gap-1.5 px-5 bg-red-600 text-white text-sm font-medium">
+        <Icon name="trash" size={16} /> Delete
+      </button>
+      <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+        style={{ transform: `translateX(${dx}px)`, transition: dragging ? 'none' : 'transform .22s ease' }}>
+        {children}
+      </div>
     </div>
   )
 }

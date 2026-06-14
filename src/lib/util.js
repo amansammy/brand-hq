@@ -27,6 +27,12 @@ export function prettyDate(date) {
   } catch { return '' }
 }
 
+// Local "today" as yyyy-mm-dd (for date input min=, avoids predating)
+export function todayISO() {
+  const d = new Date()
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
 export function fileSize(bytes) {
   if (!bytes && bytes !== 0) return ''
   const u = ['B', 'KB', 'MB', 'GB']

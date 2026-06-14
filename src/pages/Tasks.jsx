@@ -11,7 +11,7 @@ import { Avatar, EmptyState, Spinner, PageHeader, Modal } from '../components/ui
 import { LinkEditor } from '../components/Links.jsx'
 import { getLinksFrom, syncLinks } from '../lib/links.js'
 import { Icon } from '../lib/icons.jsx'
-import { prettyDate } from '../lib/util.js'
+import { prettyDate, todayISO } from '../lib/util.js'
 import { isPast, isToday, parseISO } from 'date-fns'
 
 const COLUMNS = [
@@ -137,7 +137,7 @@ export default function Tasks() {
         <div className="flex flex-wrap gap-2 mb-3">
           {milestones.length === 0 && <p className="text-sm text-faint">No milestones yet — add your launch target below.</p>}
           {milestones.map((m) => (
-            <div key={m.id} className={`group chip h-8 px-3 border ${m.done ? 'border-line bg-canvas text-faint line-through' : 'border-line-strong'}`}>
+            <div key={m.id} className={`group chip h-auto py-2 px-3 border ${m.done ? 'border-line bg-canvas text-faint line-through' : 'border-line-strong'}`}>
               <button onClick={() => toggleMilestone(m)} className="flex items-center gap-1.5">
                 <Icon name={m.done ? 'check' : 'flag'} size={13} className={m.done ? 'text-accent' : 'text-faint'} />
                 {m.title}{m.due_date && <span className="text-faint font-normal">· {prettyDate(m.due_date)}</span>}
@@ -147,8 +147,8 @@ export default function Tasks() {
           ))}
         </div>
         <form onSubmit={addMilestone} className="flex flex-col sm:flex-row gap-2">
-          <input className="input sm:flex-1" placeholder="Milestone (e.g. Launch drop 01)" value={msTitle} onChange={(e) => setMsTitle(e.target.value)} />
-          <input className="input sm:w-44" type="date" value={msDate} onChange={(e) => setMsDate(e.target.value)} />
+          <input className="input sm:flex-1 min-w-0" placeholder="Milestone (e.g. Launch drop 01)" value={msTitle} onChange={(e) => setMsTitle(e.target.value)} />
+          <input className="input w-full sm:w-44 min-w-0" type="date" min={todayISO()} value={msDate} onChange={(e) => setMsDate(e.target.value)} />
           <button className="btn btn-soft shrink-0" disabled={!msTitle.trim()}><Icon name="plus" size={16} /> Add</button>
         </form>
       </div>
@@ -348,7 +348,7 @@ function TaskModal({ task, profiles, user, allLabels, onClose, onDelete }) {
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.display_name}</option>)}
             </select></div>
           <div><label className="label">Due date</label>
-            <input className="input" type="date" value={dueDate || ''} onChange={(e) => setDueDate(e.target.value)} /></div>
+            <input className="input min-w-0" type="date" min={todayISO()} value={dueDate || ''} onChange={(e) => setDueDate(e.target.value)} /></div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
