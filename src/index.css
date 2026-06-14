@@ -19,6 +19,21 @@
   --radius-xl: 16px;
 }
 
+/* ---------- Dark theme (toggled via .dark on <html>) ---------- */
+html.dark {
+  color-scheme: dark;
+  --color-canvas: #121113;
+  --color-surface: #1b1a1e;
+  --color-ink: #f3f1ee;
+  --color-muted: #a6a2aa;
+  --color-faint: #6f6b76;
+  --color-line: #2a2832;
+  --color-line-strong: #3b3846;
+  --color-accent: #d06b4b;
+  --color-accent-hover: #e07a59;
+  --color-accent-soft: #38231b;
+}
+
 html, body, #root {
   height: 100%;
 }
@@ -58,7 +73,7 @@ body {
   .btn-ghost { background: transparent; color: var(--color-ink); border: 1px solid var(--color-line-strong); }
   .btn-ghost:hover { background: var(--color-canvas); }
   .btn-soft { background: var(--color-canvas); color: var(--color-ink); border: 1px solid var(--color-line); }
-  .btn-soft:hover { background: #f2f0ec; }
+  .btn-soft:hover { background: var(--color-line); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
   .input {
     width: 100%; height: 2.5rem; padding: 0 .75rem; border-radius: 10px;

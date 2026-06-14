@@ -57,7 +57,7 @@ export default function Moodboard() {
               )}
               {it.caption && <p className="text-sm text-muted px-3 py-2">{it.caption}</p>}
               <button onClick={() => remove(it)}
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-ink/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Icon name="trash" size={14} />
               </button>
             </div>

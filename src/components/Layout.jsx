@@ -33,7 +33,15 @@ const MORE = ALL.filter((i) => !BOTTOM.includes(i.to))
 export default function Layout() {
   const { user, profiles, signOut } = useAuth()
   const [moreOpen, setMoreOpen] = useState(false)
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const loc = useLocation()
+
+  function toggleTheme() {
+    const next = !dark
+    setDark(next)
+    document.documentElement.classList.toggle('dark', next)
+    try { localStorage.theme = next ? 'dark' : 'light' } catch (e) {}
+  }
   const me = profiles.find((p) => p.id === user?.id) || { id: user?.id, display_name: user?.email }
   const moreActive = MORE.some((i) => loc.pathname.startsWith(i.to))
 
@@ -66,7 +74,12 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="mt-auto pt-4 border-t border-line">
+        <div className="mt-auto pt-4 border-t border-line space-y-3">
+          <button onClick={toggleTheme}
+            className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-muted hover:text-ink hover:bg-canvas w-full transition-colors">
+            <Icon name={dark ? 'sun' : 'moon'} size={18} />
+            {dark ? 'Light mode' : 'Dark mode'}
+          </button>
           <div className="flex items-center gap-3 px-1">
             <Avatar profile={me} size={36} />
             <div className="min-w-0 flex-1">
@@ -85,7 +98,10 @@ export default function Layout() {
           <div className="h-8 w-8 rounded-lg bg-ink text-canvas flex items-center justify-center font-display">B</div>
           <span className="font-display text-base">Brand HQ</span>
         </div>
-        <button onClick={signOut}><Avatar profile={me} size={30} /></button>
+        <div className="flex items-center gap-1">
+          <button onClick={toggleTheme} className="p-2 text-muted hover:text-ink rounded-lg"><Icon name={dark ? 'sun' : 'moon'} size={19} /></button>
+          <button onClick={signOut}><Avatar profile={me} size={30} /></button>
+        </div>
       </header>
 
       {/* ---------- Main ---------- */}
@@ -112,7 +128,7 @@ export default function Layout() {
       {/* ---------- Mobile "More" sheet ---------- */}
       {moreOpen && (
         <div className="sm:hidden fixed inset-0 z-40" onClick={() => setMoreOpen(false)}>
-          <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div className="absolute bottom-0 inset-x-0 card rounded-b-none p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-in" onClick={(e) => e.stopPropagation()}>
             <div className="h-1 w-10 bg-line-strong rounded-full mx-auto mb-4" />
             <div className="grid grid-cols-3 gap-2">
@@ -127,6 +143,9 @@ export default function Layout() {
                 </NavLink>
               ))}
             </div>
+            <button onClick={toggleTheme} className="btn btn-soft w-full mt-3">
+              <Icon name={dark ? 'sun' : 'moon'} size={16} /> {dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            </button>
           </div>
         </div>
       )}

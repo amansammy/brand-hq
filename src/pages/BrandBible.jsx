@@ -166,7 +166,7 @@ function Palette({ colors, user }) {
         {colors.map((c) => (
           <div key={c.id} className="group w-28">
             <div className="h-20 rounded-xl border border-line relative" style={{ background: c.hex }}>
-              <button onClick={() => remove(c)} className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-ink/40 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => remove(c)} className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/40 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Icon name="close" size={13} />
               </button>
             </div>
