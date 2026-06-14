@@ -22,16 +22,16 @@
 /* ---------- Dark theme (toggled via .dark on <html>) ---------- */
 html.dark {
   color-scheme: dark;
-  --color-canvas: #121113;
-  --color-surface: #1b1a1e;
-  --color-ink: #f3f1ee;
-  --color-muted: #a6a2aa;
-  --color-faint: #6f6b76;
-  --color-line: #2a2832;
-  --color-line-strong: #3b3846;
-  --color-accent: #d06b4b;
-  --color-accent-hover: #e07a59;
-  --color-accent-soft: #38231b;
+  --color-canvas: #15110d;
+  --color-surface: #1f1a15;
+  --color-ink: #f4f0ea;
+  --color-muted: #aaa298;
+  --color-faint: #786f64;
+  --color-line: #2d2620;
+  --color-line-strong: #40372d;
+  --color-accent: #d8754f;
+  --color-accent-hover: #e4865f;
+  --color-accent-soft: #3a2317;
 }
 
 html, body, #root {
