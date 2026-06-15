@@ -138,9 +138,9 @@ export default function Feed() {
                       <span className="text-xs text-faint">· {timeAgo(a.created_at)}</span>
                       {admin && (
                         <button onClick={() => removeItem(a.id)}
-                          className="ml-auto opacity-0 group-hover:opacity-100 text-faint hover:text-accent transition-opacity"
-                          title="Remove from feed">
-                          <Icon name="close" size={15} />
+                          className="ml-auto p-1 -m-1 text-faint hover:text-accent transition-colors"
+                          title="Remove from feed" aria-label="Remove from feed">
+                          <Icon name="close" size={16} />
                         </button>
                       )}
                     </div>
