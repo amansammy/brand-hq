@@ -76,6 +76,10 @@ export default function Moodboard() {
     await supabase.from('moodboard_items').update({ tags }).eq('id', item.id)
     setItems((cur) => cur.map((x) => x.id === item.id ? { ...x, tags } : x))
   }
+  async function moveToBoard(item, bId) {
+    await supabase.from('moodboard_items').update({ board_id: bId || null }).eq('id', item.id)
+    setItems((cur) => cur.map((x) => x.id === item.id ? { ...x, board_id: bId || null } : x))
+  }
   async function createBoard(name) {
     if (!name?.trim()) return
     const { data } = await supabase.from('boards').insert({ name: name.trim(), created_by: user.id }).select().single()
@@ -160,10 +164,10 @@ export default function Moodboard() {
 
       {adding && <AddModal user={user} boardId={boardId} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load() }} />}
       {lightbox !== null && filtered[lightbox] && (
-        <Lightbox item={filtered[lightbox]}
+        <Lightbox item={filtered[lightbox]} boards={boards} allTags={allTags}
           hasPrev={lightbox > 0} hasNext={lightbox < filtered.length - 1}
           onPrev={() => setLightbox(lightbox - 1)} onNext={() => setLightbox(lightbox + 1)}
-          onClose={() => setLightbox(null)} onTags={updateTags} onPalette={addPaletteFromImage} onDelete={remove} />
+          onClose={() => setLightbox(null)} onTags={updateTags} onMove={moveToBoard} onPalette={addPaletteFromImage} onDelete={remove} />
       )}
     </div>
   )
@@ -173,7 +177,7 @@ function BoardTab({ active, onClick, children }) {
   return <button onClick={onClick} className={`chip h-8 px-3 border ${active ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted hover:border-line-strong'}`}>{children}</button>
 }
 
-function Lightbox({ item, hasPrev, hasNext, onPrev, onNext, onClose, onTags, onPalette, onDelete }) {
+function Lightbox({ item, boards = [], allTags = [], hasPrev, hasNext, onPrev, onNext, onClose, onTags, onMove, onPalette, onDelete }) {
   const [tag, setTag] = useState('')
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); if (e.key === 'ArrowLeft' && hasPrev) onPrev(); if (e.key === 'ArrowRight' && hasNext) onNext() }
@@ -199,10 +203,17 @@ function Lightbox({ item, hasPrev, hasNext, onPrev, onNext, onClose, onTags, onP
               <span key={t} className="chip h-6 px-2 bg-canvas border border-line text-muted">{t}
                 <button onClick={() => onTags(item, (item.tags || []).filter((x) => x !== t))} className="text-faint hover:text-accent"><Icon name="close" size={11} /></button></span>
             ))}
-            <input className="input h-7 w-28 text-xs" placeholder="+ tag" value={tag} onChange={(e) => setTag(e.target.value)}
+            <input className="input h-7 w-28 text-xs" placeholder="+ tag" list="mood-tags" value={tag} onChange={(e) => setTag(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && tag.trim()) { onTags(item, [...new Set([...(item.tags || []), tag.trim()])]); setTag('') } }} />
+            <datalist id="mood-tags">{allTags.map((t) => <option key={t} value={t} />)}</datalist>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted">Board
+              <select className="input h-8 w-auto text-xs" value={item.board_id || ''} onChange={(e) => onMove(item, e.target.value)}>
+                <option value="">No board</option>
+                {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </label>
             {item.type === 'image' && <button onClick={() => onPalette(item)} className="btn btn-soft h-8 text-xs"><Icon name="mood" size={14} /> Extract palette</button>}
             <a href={item.url} target="_blank" rel="noreferrer" className="btn btn-soft h-8 text-xs"><Icon name="link" size={14} /> Open</a>
             <button onClick={() => onDelete(item)} className="btn btn-soft h-8 text-xs text-accent ml-auto"><Icon name="trash" size={14} /> Delete</button>

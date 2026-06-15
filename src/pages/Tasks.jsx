@@ -143,8 +143,14 @@ export default function Tasks() {
     await supabase.from('milestones').insert({ title: msTitle.trim(), due_date: msDate || null, created_by: user.id })
     setMsTitle(''); setMsDate('')
   }
-  const toggleMilestone = (m) => supabase.from('milestones').update({ done: !m.done }).eq('id', m.id)
-  const deleteMilestone = (m) => supabase.from('milestones').delete().eq('id', m.id)
+  async function toggleMilestone(m) {
+    setMilestones((cur) => cur.map((x) => x.id === m.id ? { ...x, done: !x.done } : x))
+    await supabase.from('milestones').update({ done: !m.done }).eq('id', m.id)
+  }
+  async function deleteMilestone(m) {
+    setMilestones((cur) => cur.filter((x) => x.id !== m.id))
+    await supabase.from('milestones').delete().eq('id', m.id)
+  }
 
   function onDragEnd({ active, over }) {
     setActiveId(null)
@@ -176,7 +182,7 @@ export default function Tasks() {
                 <Icon name={m.done ? 'check' : 'flag'} size={13} className={m.done ? 'text-accent' : 'text-faint'} />
                 {m.title}{m.due_date && <span className="text-faint font-normal">· {prettyDate(m.due_date)}</span>}
               </button>
-              <button onClick={() => deleteMilestone(m)} className="opacity-0 group-hover:opacity-100 text-faint hover:text-accent"><Icon name="close" size={13} /></button>
+              <button onClick={() => deleteMilestone(m)} className="text-faint hover:text-accent ml-0.5"><Icon name="close" size={14} /></button>
             </div>
           ))}
         </div>
@@ -210,10 +216,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      {tasks.length === 0 ? (
-        <EmptyState icon="tasks" title="No tasks yet" subtitle="Break the brand down into doable steps. Add your first task to get rolling."
-          action={<button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> New task</button>} />
-      ) : view === 'board' ? (
+      {view === 'board' ? (
         <DndContext sensors={sensors} onDragStart={(e) => setActiveId(e.active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {COLUMNS.map((col) => (

@@ -14,10 +14,10 @@ const TYPES = [
 ]
 
 const MODELS = [
-  { id: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell — fast & best' },
-  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'Stable Diffusion XL' },
-  { id: '@cf/bytedance/stable-diffusion-xl-lightning', label: 'SDXL Lightning — fast' },
-  { id: '@cf/lykon/dreamshaper-8-lcm', label: 'DreamShaper 8' },
+  { id: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell', desc: 'Best all-rounder — crisp, modern, great for logos & wordmarks. Fast.' },
+  { id: '@cf/stabilityai/stable-diffusion-xl-base-1.0', label: 'Stable Diffusion XL', desc: 'Most photorealistic & detailed — best for mood images and tee mockups.' },
+  { id: '@cf/bytedance/stable-diffusion-xl-lightning', label: 'SDXL Lightning', desc: 'Very fast SDXL — good for quick drafts; a touch less detail.' },
+  { id: '@cf/lykon/dreamshaper-8-lcm', label: 'DreamShaper 8', desc: 'Stylised & artistic — illustrative graphic prints and bold motifs.' },
 ]
 
 const genUrl = (prompt, model, seed) =>
@@ -36,6 +36,21 @@ export default function Studio() {
   const [saved, setSaved] = useState({})
   const [usage, setUsage] = useState(null)
   const [sessionCount, setSessionCount] = useState(0)
+  const [zoom, setZoom] = useState(null)
+
+  // Restore the last generation after a refresh (images re-render from their seeds).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('studio_last')
+      if (!raw) return
+      const s = JSON.parse(raw)
+      if (s?.prompt && s?.seeds?.length) {
+        setPrompt(s.prompt); setType(s.type || 'logo'); setModel(s.model || MODELS[0].id)
+        const wrapped = (TYPES.find((t) => t.key === (s.type || 'logo')) || TYPES[0]).wrap(s.prompt)
+        setResults(s.seeds.map((seed) => ({ seed, url: genUrl(wrapped, s.model || MODELS[0].id, seed), loaded: false, error: false })))
+      }
+    } catch (e) {}
+  }, [])
 
   const load = useCallback(async () => {
     const [b, a] = await Promise.all([
@@ -54,10 +69,9 @@ export default function Studio() {
     if (!prompt.trim()) return
     setSaved({})
     const wrapped = TYPES.find((t) => t.key === type).wrap(prompt.trim())
-    setResults(Array.from({ length: 4 }, () => {
-      const seed = Math.floor(Math.random() * 1e6)
-      return { seed, url: genUrl(wrapped, model, seed), loaded: false, error: false }
-    }))
+    const seeds = Array.from({ length: 4 }, () => Math.floor(Math.random() * 1e6))
+    setResults(seeds.map((seed) => ({ seed, url: genUrl(wrapped, model, seed), loaded: false, error: false })))
+    try { localStorage.setItem('studio_last', JSON.stringify({ prompt: prompt.trim(), type, model, seeds })) } catch (e) {}
     fetch('/api/usage').then((r) => r.ok && r.json().then(setUsage)).catch(() => {})
   }
 
@@ -119,6 +133,7 @@ export default function Studio() {
               {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </label>
+          <span className="text-faint italic basis-full sm:basis-auto">{MODELS.find((m) => m.id === model)?.desc}</span>
           <span className="text-faint">
             {!usage ? 'Checking quota…'
               : usage.configured === false ? '⚠ Cloudflare key not added yet'
@@ -149,15 +164,23 @@ export default function Studio() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {results.map((item) => (
-              <div key={item.seed} className="card overflow-hidden">
+              <div key={item.seed} className="card overflow-hidden group">
                 <div className="relative bg-canvas aspect-square grid place-items-center">
                   {!item.loaded && !item.error && <div className="absolute inset-0 grid place-items-center"><div className="h-6 w-6 rounded-full border-2 border-line-strong border-t-accent animate-spin" /></div>}
                   {item.error ? (
                     <div className="text-center p-3 text-xs text-faint"><Icon name="close" size={20} className="mx-auto mb-1 text-accent" /> Couldn't generate</div>
                   ) : (
-                    <img src={item.url} alt="" className={`w-full h-full object-cover ${item.loaded ? '' : 'opacity-0'}`}
-                      onLoad={() => { setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x)); setSessionCount((c) => c + 1) }}
-                      onError={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, error: true } : x))} />
+                    <>
+                      <img src={item.url} alt="" className={`w-full h-full object-cover ${item.loaded ? '' : 'opacity-0'}`}
+                        onLoad={() => { setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x)); setSessionCount((c) => c + 1) }}
+                        onError={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, error: true } : x))} />
+                      {item.loaded && (
+                        <button onClick={() => setZoom(item.url)} title="Maximise"
+                          className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/55 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Icon name="search" size={14} />
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
                 {!item.error && (
@@ -171,6 +194,14 @@ export default function Studio() {
             ))}
           </div>
         </>
+      )}
+
+      {zoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setZoom(null)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <img src={zoom} alt="" className="relative max-h-[90vh] max-w-full object-contain rounded-xl" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setZoom(null)} className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/15 text-white grid place-items-center hover:bg-white/25"><Icon name="close" size={18} /></button>
+        </div>
       )}
     </div>
   )
