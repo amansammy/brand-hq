@@ -247,7 +247,7 @@ function AddModal({ user, boardId, onClose, onDone }) {
     setUloading(true)
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=15&page=${upage}&query=${encodeURIComponent(uq)}`, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
+        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=9&page=${upage}&query=${encodeURIComponent(uq)}`, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
         const j = await r.json()
         if (!cancel) { setUresults(j.results || []); setUtotal(j.total_pages || 1); gridRef.current?.scrollTo({ top: 0 }) }
       } catch (e) { if (!cancel) setUresults([]) }
