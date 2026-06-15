@@ -38,6 +38,20 @@ export async function uploadPublicImage(bucket, fileObj, prefix = '') {
   return { url, path }
 }
 
+// Fetch an image from a URL (e.g. our /api/generate) and store it permanently
+// in a public bucket; returns { url, path }.
+export async function uploadFromUrl(bucket, srcUrl, prefix = '') {
+  const res = await fetch(srcUrl)
+  if (!res.ok) throw new Error('Could not fetch the generated image')
+  const blob = await res.blob()
+  const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0]
+  const path = `${prefix ? prefix + '/' : ''}${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from(bucket).upload(path, blob, { contentType: blob.type })
+  if (error) throw error
+  const url = supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
+  return { url, path }
+}
+
 // When an entity is deleted, remove its feed items, comments and reactions
 // so the feed never references something that no longer exists.
 export async function purgeEntity(entity_type, entity_id) {
