@@ -37,6 +37,19 @@ export default function Feed() {
       .order('created_at', { ascending: false }).limit(100)
     setItems(data || [])
     setLoading(false)
+    // Auto-expand items that already have comments so the discussion is visible.
+    const ids = (data || []).map((a) => a.id)
+    if (ids.length) {
+      const { data: cmts } = await supabase.from('comments').select('entity_id')
+        .eq('entity_type', 'activity').in('entity_id', ids)
+      if (cmts?.length) {
+        setOpenComments((o) => {
+          const next = { ...o }
+          cmts.forEach((c) => { next[c.entity_id] = true })
+          return next
+        })
+      }
+    }
   }, [])
 
   useEffect(() => {
