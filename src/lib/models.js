@@ -8,15 +8,8 @@ export const MODELS = [
   { id: 'cf:sdxl-lightning', provider: 'cf', model: '@cf/bytedance/stable-diffusion-xl-lightning', label: 'SDXL Lightning', desc: 'Very fast SDXL drafts.', group: 'Cloudflare · live', maxSteps: 8, distilled: true },
   { id: 'cf:dreamshaper', provider: 'cf', model: '@cf/lykon/dreamshaper-8-lcm', label: 'DreamShaper 8 LCM', desc: 'Stylised & artistic, fast.', group: 'Cloudflare · live', maxSteps: 8, distilled: true },
 
-  // ---- Hugging Face (needs a free HF token; availability varies) ----
-  { id: 'hf:flux-schnell', provider: 'hf', model: 'black-forest-labs/FLUX.1-schnell', label: 'FLUX.1 Schnell', desc: 'Fast, sharp, modern.', group: 'Hugging Face', maxSteps: 8, distilled: true },
-  { id: 'hf:flux-dev', provider: 'hf', model: 'black-forest-labs/FLUX.1-dev', label: 'FLUX.1 Dev', desc: 'Higher-quality FLUX, slower.', group: 'Hugging Face', maxSteps: 50 },
-  { id: 'hf:sdxl', provider: 'hf', model: 'stabilityai/stable-diffusion-xl-base-1.0', label: 'Stable Diffusion XL', desc: 'Versatile workhorse.', group: 'Hugging Face', maxSteps: 50 },
-  { id: 'hf:playground', provider: 'hf', model: 'playgroundai/playground-v2.5-1024px-aesthetic', label: 'Playground v2.5', desc: 'Very aesthetic, vibrant colour.', group: 'Hugging Face', maxSteps: 50 },
-  { id: 'hf:dreamshaper-xl', provider: 'hf', model: 'Lykon/dreamshaper-xl-1-0', label: 'DreamShaper XL', desc: 'Polished, illustrative.', group: 'Hugging Face', maxSteps: 40 },
-  { id: 'hf:realvis', provider: 'hf', model: 'SG161222/RealVisXL_V4.0', label: 'RealVis XL', desc: 'Photorealism specialist.', group: 'Hugging Face', maxSteps: 40 },
-  { id: 'hf:openjourney', provider: 'hf', model: 'prompthero/openjourney-v4', label: 'Openjourney v4', desc: 'Midjourney-style art.', group: 'Hugging Face', maxSteps: 50 },
-  { id: 'hf:anything', provider: 'hf', model: 'stablediffusionapi/anything-v5', label: 'Anything v5', desc: 'Anime / illustration.', group: 'Hugging Face', maxSteps: 50 },
+  // ---- Hugging Face (free tier now only serves FLUX.1-schnell) ----
+  { id: 'hf:flux-schnell', provider: 'hf', model: 'black-forest-labs/FLUX.1-schnell', label: 'FLUX.1 Schnell', desc: 'Fast, sharp, modern — HF\'s free model.', group: 'Hugging Face · free', maxSteps: 8, distilled: true },
 ]
 
 export const SIZES = [
