@@ -10,6 +10,7 @@ const TYPES = [
   { key: 'pattern', label: 'Textile pattern', wrap: (p) => `seamless repeating textile pattern, ${p}, flat vector, tileable` },
   { key: 'mood', label: 'Mood image', wrap: (p) => `${p}, editorial fashion photography, cinematic, moodboard aesthetic` },
   { key: 'mockup', label: 'Tee mockup', wrap: (p) => `${p} printed on a plain folded t-shirt, clean product mockup photo, studio lighting` },
+  { key: 'custom', label: 'Custom', wrap: (p) => p },
 ]
 
 const MODELS = [
@@ -34,6 +35,7 @@ export default function Studio() {
   const [arenaId, setArenaId] = useState('')
   const [saved, setSaved] = useState({})
   const [usage, setUsage] = useState(null)
+  const [sessionCount, setSessionCount] = useState(0)
 
   const load = useCallback(async () => {
     const [b, a] = await Promise.all([
@@ -97,10 +99,19 @@ export default function Studio() {
               className={`chip h-8 px-3 border ${type === t.key ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted'}`}>{t.label}</button>
           ))}
         </div>
-        <form onSubmit={generate} className="flex flex-col sm:flex-row gap-2">
-          <input className="input flex-1 min-w-0" autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)}
-            placeholder={type === 'logo' ? 'e.g. coastal streetwear wordmark, wave motif, sand tones' : 'describe what you want to see…'} />
-          <button className="btn btn-primary shrink-0" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate 4</button>
+        <form onSubmit={generate}>
+          <textarea className="input min-h-[60px] py-2.5 leading-relaxed" rows={type === 'custom' ? 4 : 2}
+            autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)}
+            placeholder={type === 'custom'
+              ? 'Write a full, detailed prompt — subject, style, colours, composition, mood, lighting…'
+              : type === 'logo' ? 'e.g. coastal streetwear wordmark, wave motif, sand tones'
+              : 'describe what you want to see…'} />
+          <div className="flex items-end justify-between gap-3 mt-2">
+            <p className="text-[11px] text-faint line-clamp-2 flex-1">
+              {!prompt.trim() ? '' : type === 'custom' ? 'Sent exactly as written.' : `Sends → ${TYPES.find((t) => t.key === type).wrap(prompt.trim())}`}
+            </p>
+            <button className="btn btn-primary shrink-0" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate 4</button>
+          </div>
         </form>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs">
           <label className="flex items-center gap-1.5 text-muted">Model
@@ -111,8 +122,8 @@ export default function Studio() {
           <span className="text-faint">
             {!usage ? 'Checking quota…'
               : usage.configured === false ? '⚠ Cloudflare key not added yet'
-              : usage.remaining != null ? `${usage.remaining.toLocaleString()} / ${usage.limit.toLocaleString()} neurons left today`
-              : `Free tier: ${usage.limit.toLocaleString()} neurons/day`}
+              : `${(usage.used || 0).toLocaleString()} / ${usage.limit.toLocaleString()} neurons used today (Cloudflare updates this with a delay)`}
+            {sessionCount > 0 && ` · ${sessionCount} generated this session`}
           </span>
         </div>
       </div>
@@ -145,7 +156,7 @@ export default function Studio() {
                     <div className="text-center p-3 text-xs text-faint"><Icon name="close" size={20} className="mx-auto mb-1 text-accent" /> Couldn't generate</div>
                   ) : (
                     <img src={item.url} alt="" className={`w-full h-full object-cover ${item.loaded ? '' : 'opacity-0'}`}
-                      onLoad={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x))}
+                      onLoad={() => { setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x)); setSessionCount((c) => c + 1) }}
                       onError={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, error: true } : x))} />
                   )}
                 </div>

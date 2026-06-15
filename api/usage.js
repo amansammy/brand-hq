@@ -13,6 +13,7 @@ export default async function handler(req, res) {
   const query = `query($acct:String!,$start:Time!,$end:Time!){
     viewer{ accounts(filter:{accountTag:$acct}){
       aiInferenceAdaptiveGroups(limit:10000, filter:{datetimeHour_geq:$start, datetimeHour_leq:$end}){
+        count
         sum { totalNeurons }
       }
     }}
@@ -27,7 +28,8 @@ export default async function handler(req, res) {
     const groups = j?.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups || []
     if (j?.errors?.length || !groups.length) { res.status(200).json({ configured: true, limit: LIMIT }); return }
     const used = groups.reduce((s, g) => s + (g?.sum?.totalNeurons || 0), 0)
-    res.status(200).json({ configured: true, limit: LIMIT, used: Math.round(used), remaining: Math.max(0, LIMIT - Math.round(used)) })
+    const requests = groups.reduce((s, g) => s + (g?.count || 0), 0)
+    res.status(200).json({ configured: true, limit: LIMIT, used: Math.round(used), requests, remaining: Math.max(0, LIMIT - Math.round(used)) })
   } catch (e) {
     res.status(200).json({ configured: true, limit: LIMIT })
   }
