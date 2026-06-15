@@ -74,7 +74,7 @@ async function generateHF({ res, model, prompt, negative, steps, guidance, width
   if (width) parameters.width = width
   if (height) parameters.height = height
   if (seed != null) parameters.seed = seed
-  const r = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+  const r = await fetch(`https://router.huggingface.co/hf-inference/models/${model}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${HF}`, 'Content-Type': 'application/json', Accept: 'image/png' },
     body: JSON.stringify({ inputs: prompt, parameters, options: { wait_for_model: true } }),
