@@ -325,7 +325,7 @@ function AddModal({ user, boardId, onClose, onDone }) {
       {tab === 'unsplash' && (
         <div>
           <input className="input" autoFocus placeholder="Search Unsplash — e.g. linen texture, streetwear…" value={uq} onChange={(e) => { setUq(e.target.value); setUpage(1) }} />
-          <div ref={gridRef} className="grid grid-cols-3 gap-2 mt-3 max-h-72 overflow-y-auto">
+          <div ref={gridRef} className="grid grid-cols-3 gap-2 mt-3">
             {uloading && <p className="col-span-3 text-sm text-faint text-center py-6">Searching…</p>}
             {!uloading && uresults.map((p) => (
               <button key={p.id} onClick={() => addUnsplash(p)} disabled={busy} className="aspect-square rounded-lg overflow-hidden border border-line hover:border-accent">
