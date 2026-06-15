@@ -106,8 +106,7 @@ export default function Studio() {
 
   const usageLine = () => {
     if (m.provider === 'hf') {
-      if (usage && usage.hf === false) return '⚠ Hugging Face token not added yet'
-      return 'Hugging Face · free serverless (rate-limited, no live balance)'
+      return usage?.hf ? 'Hugging Face · free serverless (rate-limited, no live balance)' : '⚠ Hugging Face token not added yet'
     }
     if (!usage) return 'Checking quota…'
     if (usage.configured === false) return '⚠ Cloudflare key not added yet'
@@ -182,7 +181,6 @@ export default function Studio() {
             </div>
           </div>
         )}
-        <p className="text-[11px] text-faint mt-2">Cloudflare models are live & free. Hugging Face needs a free token and availability varies.</p>
       </div>
 
       {results.length === 0 ? (
