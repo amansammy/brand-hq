@@ -125,18 +125,21 @@ export default function Studio() {
             <p className="text-[11px] text-faint line-clamp-2 flex-1">
               {!prompt.trim() ? '' : type === 'custom' ? 'Sent exactly as written.' : `Sends → ${TYPES.find((t) => t.key === type).wrap(prompt.trim())}`}
             </p>
-            <button className="btn btn-primary shrink-0" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate {count}</button>
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="flex items-center gap-1.5 text-sm text-muted">
+                <select className="input h-10 w-auto" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+                  {[1, 2, 3, 4, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                image{count > 1 ? 's' : ''}
+              </label>
+              <button className="btn btn-primary" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate</button>
+            </div>
           </div>
         </form>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs">
           <label className="flex items-center gap-1.5 text-muted">Model
             <select className="input h-8 w-auto text-xs" value={model} onChange={(e) => setModel(e.target.value)}>
               {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-muted">Count
-            <select className="input h-8 w-auto text-xs" value={count} onChange={(e) => setCount(Number(e.target.value))}>
-              {[1, 2, 3, 4, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
           <span className="text-faint italic basis-full sm:basis-auto">{MODELS.find((m) => m.id === model)?.desc}</span>
