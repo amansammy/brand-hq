@@ -17,9 +17,10 @@ import BrandBible from './pages/BrandBible.jsx'
 import Budget from './pages/Budget.jsx'
 import Studio from './pages/Studio.jsx'
 import Suppliers from './pages/Suppliers.jsx'
+import Admin from './pages/Admin.jsx'
 
 export default function App() {
-  const { session, loading } = useAuth()
+  const { session, loading, isOwner } = useAuth()
 
   if (!isConfigured) return <Setup />
   if (loading) return <div className="min-h-full grid place-items-center"><Spinner /></div>
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="arena" element={<Arena />} />
         <Route path="mood" element={<Moodboard />} />
         <Route path="suppliers" element={<Suppliers />} />
+        <Route path="admin" element={isOwner ? <Admin /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

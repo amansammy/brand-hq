@@ -37,7 +37,7 @@ const BOTTOM = ['/', '/feed', '/drops', '/tasks']
 const MORE = ALL.filter((i) => !BOTTOM.includes(i.to))
 
 export default function Layout() {
-  const { user, profiles, signOut } = useAuth()
+  const { user, profiles, signOut, isOwner } = useAuth()
   const [moreOpen, setMoreOpen] = useState(false)
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [searchOpen, setSearchOpen] = useState(false)
@@ -97,6 +97,15 @@ export default function Layout() {
         </nav>
 
         <div className="mt-auto pt-4 border-t border-line space-y-2">
+          {isOwner && (
+            <NavLink to="/admin"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  isActive ? 'bg-accent-soft text-accent' : 'text-muted hover:text-ink hover:bg-canvas'
+                }`}>
+              <Icon name="shield" size={18} /> Permissions
+            </NavLink>
+          )}
           <NotificationBell variant="sidebar" />
           <button onClick={toggleTheme}
             className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium text-muted hover:text-ink hover:bg-canvas w-full transition-colors">
@@ -165,6 +174,16 @@ export default function Layout() {
                   {n.label}
                 </NavLink>
               ))}
+              {isOwner && (
+                <NavLink to="/admin" onClick={() => setMoreOpen(false)}
+                  className={({ isActive }) =>
+                    `flex flex-col items-center gap-2 py-4 rounded-xl border text-xs font-medium ${
+                      isActive ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted'
+                    }`}>
+                  <Icon name="shield" size={22} />
+                  Permissions
+                </NavLink>
+              )}
             </div>
             <button onClick={toggleTheme} className="btn btn-soft w-full mt-3">
               <Icon name={dark ? 'sun' : 'moon'} size={16} /> {dark ? 'Switch to light mode' : 'Switch to dark mode'}

@@ -7,7 +7,10 @@ import { Icon } from '../lib/icons.jsx'
 import { timeAgo } from '../lib/util.js'
 
 export default function Notes() {
-  const { user, profiles } = useAuth()
+  const { user, profiles, can } = useAuth()
+  const canCreate = can('notes', 'create')
+  const canEdit = can('notes', 'edit')
+  const canDelete = can('notes', 'delete')
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(null)
@@ -50,12 +53,12 @@ export default function Notes() {
   return (
     <div>
       <PageHeader title="Notes" subtitle="Manifesto, brand voice, ideas — your living docs."
-        action={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={16} /> New note</button>} />
+        action={canCreate && <button className="btn btn-primary" onClick={create}><Icon name="plus" size={16} /> New note</button>} />
 
       {notes.length === 0 ? (
         <EmptyState icon="notes" title="No notes yet"
           subtitle="Draft the manifesto, jot brand voice rules, collect naming ideas — anything you want to write together."
-          action={<button className="btn btn-primary" onClick={create}><Icon name="plus" size={16} /> Write a note</button>} />
+          action={canCreate && <button className="btn btn-primary" onClick={create}><Icon name="plus" size={16} /> Write a note</button>} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {notes.map((n) => (
@@ -72,16 +75,17 @@ export default function Notes() {
         </div>
       )}
 
-      {open && <NoteEditor note={open} user={user} onClose={closeEditor} onSaved={load} />}
+      {open && <NoteEditor note={open} user={user} canEdit={canEdit} canDelete={canDelete} onClose={closeEditor} onSaved={load} />}
     </div>
   )
 }
 
-function NoteEditor({ note, user, onClose, onSaved }) {
+function NoteEditor({ note, user, canEdit, canDelete, onClose, onSaved }) {
   const [title, setTitle] = useState(note.title || '')
   const [content, setContent] = useState(note.content || '')
   const [saving, setSaving] = useState(false)
   const dirty = title !== (note.title || '') || content !== (note.content || '')
+  const readOnly = !canEdit
 
   async function save() {
     setSaving(true)
@@ -96,15 +100,16 @@ function NoteEditor({ note, user, onClose, onSaved }) {
   }
 
   return (
-    <Modal open onClose={onClose} title={note.title ? 'Edit note' : 'New note'} maxWidth="max-w-2xl"
+    <Modal open onClose={onClose} title={readOnly ? 'View note' : (note.title ? 'Edit note' : 'New note')} maxWidth="max-w-2xl"
       footer={<>
-        <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>
+        {canDelete && <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>}
         <button onClick={onClose} className="btn btn-soft">Close</button>
-        <button onClick={save} className="btn btn-primary" disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save'}</button>
+        {!readOnly && <button onClick={save} className="btn btn-primary" disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save'}</button>}
       </>}>
+      {readOnly && <p className="text-xs text-faint mb-2 flex items-center gap-1"><Icon name="lock" size={12} /> You have view-only access to notes.</p>}
       <input className="input text-lg font-display border-0 px-0 focus:ring-0 focus:shadow-none mb-2 h-auto py-1"
-        style={{ boxShadow: 'none' }} placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea className="input min-h-[45vh] leading-relaxed" placeholder="Start writing…"
+        style={{ boxShadow: 'none' }} placeholder="Title" value={title} readOnly={readOnly} onChange={(e) => setTitle(e.target.value)} />
+      <textarea className="input min-h-[45vh] leading-relaxed" placeholder="Start writing…" readOnly={readOnly}
         value={content} onChange={(e) => setContent(e.target.value)} />
     </Modal>
   )

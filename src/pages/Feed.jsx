@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, logActivity } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
-import { isAdmin, entityLink } from '../lib/config.js'
+import { entityLink } from '../lib/config.js'
 import { Avatar, EmptyState, Spinner, PageHeader } from '../components/ui.jsx'
 import { Reactions, Comments } from '../components/Discussion.jsx'
 import MentionInput, { MentionText } from '../components/MentionInput.jsx'
@@ -21,9 +21,10 @@ const TYPE_ICON = {
 }
 
 export default function Feed() {
-  const { user, profiles } = useAuth()
+  const { user, profiles, can } = useAuth()
   const navigate = useNavigate()
-  const admin = isAdmin(user)
+  const admin = can('feed', 'moderate')
+  const canPost = can('feed', 'post')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState('')
@@ -94,6 +95,7 @@ export default function Feed() {
         )} />
 
       {/* Composer */}
+      {canPost && (
       <div className="card p-4 mb-6">
         <form onSubmit={post}>
           <div className="flex gap-3">
@@ -112,6 +114,7 @@ export default function Feed() {
           )}
         </form>
       </div>
+      )}
 
       {loading ? <Spinner /> : items.length === 0 ? (
         <EmptyState icon="feed" title="Nothing here yet"

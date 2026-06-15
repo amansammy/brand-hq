@@ -46,6 +46,8 @@ const P = {
   factory: <><path d="M3 21V9l6 4V9l6 4V5h6v16H3Z" /><path d="M9 21v-4M15 21v-4" /></>,
   grid2: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   star2: <><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19l1-5.8L3.5 9.2l5.9-.9L12 3Z" /></>,
+  shield: <><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3Z" /><path d="m9 12 2 2 4-4" /></>,
+  lock: <><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
 }
 
 export function Icon({ name, size = 20, className = '', strokeWidth = 1.8, ...rest }) {

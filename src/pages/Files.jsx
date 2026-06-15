@@ -9,7 +9,10 @@ import { Icon } from '../lib/icons.jsx'
 import { timeAgo, fileSize } from '../lib/util.js'
 
 export default function Files() {
-  const { user, profiles } = useAuth()
+  const { user, profiles, can } = useAuth()
+  const canUpload = can('files', 'upload')
+  const canEdit = can('files', 'edit')
+  const canDelete = can('files', 'delete')
   const [files, setFiles] = useState([])
   const [versions, setVersions] = useState([])
   const [commentCounts, setCommentCounts] = useState({})
@@ -59,12 +62,12 @@ export default function Files() {
   return (
     <div>
       <PageHeader title="File vault" subtitle="Upload, version, and lock the final — PDFs, logos, anything."
-        action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="upload" size={16} /> New file</button>} />
+        action={canUpload && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="upload" size={16} /> New file</button>} />
 
       {files.length === 0 ? (
         <EmptyState icon="files" title="No files yet"
           subtitle="Upload your manifesto draft, a logo, a moodboard PDF — every new version is kept so you can compare and pick the final."
-          action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="upload" size={16} /> Upload a file</button>} />
+          action={canUpload && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="upload" size={16} /> Upload a file</button>} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {files.map((f) => {
@@ -105,7 +108,8 @@ export default function Files() {
 
       {creating && <NewFileModal user={user} onClose={() => setCreating(false)} onDone={(id) => { setCreating(false); load().then(() => setOpen(id)) }} />}
       {open && <FileDetail fileId={open} file={files.find((f) => f.id === open)} versions={versionsFor(open)}
-        profiles={profiles} user={user} onClose={closeDetail} onChange={load} />}
+        profiles={profiles} user={user} canUpload={canUpload} canEdit={canEdit} canDelete={canDelete}
+        onClose={closeDetail} onChange={load} />}
     </div>
   )
 }
@@ -174,7 +178,7 @@ function NewFileModal({ user, onClose, onDone }) {
   )
 }
 
-function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange }) {
+function FileDetail({ fileId, file, versions, profiles, user, canUpload, canEdit, canDelete, onClose, onChange }) {
   const byId = (id) => profiles.find((p) => p.id === id) || { id, display_name: 'Someone' }
   const [note, setNote] = useState('')
   const [fileObj, setFileObj] = useState(null)
@@ -210,10 +214,11 @@ function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange 
 
   return (
     <Modal open onClose={onClose} title={file?.name || 'File'} maxWidth="max-w-2xl"
-      footer={<button onClick={removeFile} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete file</button>}>
+      footer={canDelete && <button onClick={removeFile} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete file</button>}>
       {file?.description && <p className="text-sm text-muted mb-4">{file.description}</p>}
 
       {/* Add new version */}
+      {canUpload && (
       <div className="card bg-canvas p-3 mb-5">
         <div className="flex items-center gap-2 mb-2">
           <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-soft">
@@ -229,6 +234,7 @@ function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange 
           </div>
         )}
       </div>
+      )}
 
       {/* Version history */}
       <h3 className="text-sm font-semibold text-muted mb-2">Version history</h3>
@@ -247,7 +253,7 @@ function FileDetail({ fileId, file, versions, profiles, user, onClose, onChange 
               </p>
             </div>
             <button onClick={() => download(v)} className="btn btn-soft h-8 px-2.5 shrink-0"><Icon name="download" size={15} /></button>
-            {!v.is_final && <button onClick={() => markFinal(v)} className="btn btn-soft h-8 px-2.5 shrink-0 text-accent"><Icon name="star" size={15} /></button>}
+            {canEdit && !v.is_final && <button onClick={() => markFinal(v)} className="btn btn-soft h-8 px-2.5 shrink-0 text-accent"><Icon name="star" size={15} /></button>}
           </div>
         ))}
       </div>
