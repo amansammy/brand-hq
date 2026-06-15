@@ -234,24 +234,27 @@ function AddModal({ user, boardId, onClose, onDone }) {
   const [uq, setUq] = useState('')
   const [uresults, setUresults] = useState([])
   const [uloading, setUloading] = useState(false)
+  const [upage, setUpage] = useState(1)
+  const [utotal, setUtotal] = useState(1)
+  const gridRef = useRef(null)
   const inputRef = useRef()
   const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_KEY
   const hasUnsplash = !!UNSPLASH_KEY
 
   useEffect(() => {
-    if (tab !== 'unsplash' || !uq.trim()) { setUresults([]); return }
+    if (tab !== 'unsplash' || !uq.trim()) { setUresults([]); setUtotal(1); return }
     let cancel = false
     setUloading(true)
     const t = setTimeout(async () => {
       try {
-        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=12&query=${encodeURIComponent(uq)}`, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
+        const r = await fetch(`https://api.unsplash.com/search/photos?per_page=15&page=${upage}&query=${encodeURIComponent(uq)}`, { headers: { Authorization: `Client-ID ${UNSPLASH_KEY}` } })
         const j = await r.json()
-        if (!cancel) setUresults(j.results || [])
+        if (!cancel) { setUresults(j.results || []); setUtotal(j.total_pages || 1); gridRef.current?.scrollTo({ top: 0 }) }
       } catch (e) { if (!cancel) setUresults([]) }
       finally { if (!cancel) setUloading(false) }
-    }, 350)
+    }, 300)
     return () => { cancel = true; clearTimeout(t) }
-  }, [uq, tab])
+  }, [uq, tab, upage])
 
   async function addUnsplash(photo) {
     setBusy(true); setErr('')
@@ -321,8 +324,8 @@ function AddModal({ user, boardId, onClose, onDone }) {
       )}
       {tab === 'unsplash' && (
         <div>
-          <input className="input" autoFocus placeholder="Search Unsplash — e.g. linen texture, streetwear…" value={uq} onChange={(e) => setUq(e.target.value)} />
-          <div className="grid grid-cols-3 gap-2 mt-3 max-h-72 overflow-y-auto">
+          <input className="input" autoFocus placeholder="Search Unsplash — e.g. linen texture, streetwear…" value={uq} onChange={(e) => { setUq(e.target.value); setUpage(1) }} />
+          <div ref={gridRef} className="grid grid-cols-3 gap-2 mt-3 max-h-72 overflow-y-auto">
             {uloading && <p className="col-span-3 text-sm text-faint text-center py-6">Searching…</p>}
             {!uloading && uresults.map((p) => (
               <button key={p.id} onClick={() => addUnsplash(p)} disabled={busy} className="aspect-square rounded-lg overflow-hidden border border-line hover:border-accent">
@@ -331,6 +334,13 @@ function AddModal({ user, boardId, onClose, onDone }) {
             ))}
             {!uloading && uq.trim() && uresults.length === 0 && <p className="col-span-3 text-sm text-faint text-center py-6">No photos found.</p>}
           </div>
+          {uresults.length > 0 && (
+            <div className="flex items-center justify-between mt-3">
+              <button onClick={() => setUpage((p) => Math.max(1, p - 1))} disabled={upage <= 1 || uloading} className="btn btn-soft h-8 px-3 text-xs">‹ Prev</button>
+              <span className="text-xs text-faint">Page {upage} of {utotal}</span>
+              <button onClick={() => setUpage((p) => Math.min(utotal, p + 1))} disabled={upage >= utotal || uloading} className="btn btn-soft h-8 px-3 text-xs">Next ›</button>
+            </div>
+          )}
         </div>
       )}
 
