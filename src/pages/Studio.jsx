@@ -28,6 +28,7 @@ export default function Studio() {
   const [prompt, setPrompt] = useState('')
   const [type, setType] = useState('logo')
   const [model, setModel] = useState(MODELS[0].id)
+  const [count, setCount] = useState(4)
   const [results, setResults] = useState([])
   const [boards, setBoards] = useState([])
   const [arenas, setArenas] = useState([])
@@ -69,7 +70,7 @@ export default function Studio() {
     if (!prompt.trim()) return
     setSaved({})
     const wrapped = TYPES.find((t) => t.key === type).wrap(prompt.trim())
-    const seeds = Array.from({ length: 4 }, () => Math.floor(Math.random() * 1e6))
+    const seeds = Array.from({ length: count }, () => Math.floor(Math.random() * 1e6))
     setResults(seeds.map((seed) => ({ seed, url: genUrl(wrapped, model, seed), loaded: false, error: false })))
     try { localStorage.setItem('studio_last', JSON.stringify({ prompt: prompt.trim(), type, model, seeds })) } catch (e) {}
     fetch('/api/usage').then((r) => r.ok && r.json().then(setUsage)).catch(() => {})
@@ -124,13 +125,18 @@ export default function Studio() {
             <p className="text-[11px] text-faint line-clamp-2 flex-1">
               {!prompt.trim() ? '' : type === 'custom' ? 'Sent exactly as written.' : `Sends → ${TYPES.find((t) => t.key === type).wrap(prompt.trim())}`}
             </p>
-            <button className="btn btn-primary shrink-0" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate 4</button>
+            <button className="btn btn-primary shrink-0" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate {count}</button>
           </div>
         </form>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-xs">
           <label className="flex items-center gap-1.5 text-muted">Model
             <select className="input h-8 w-auto text-xs" value={model} onChange={(e) => setModel(e.target.value)}>
               {MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-muted">Count
+            <select className="input h-8 w-auto text-xs" value={count} onChange={(e) => setCount(Number(e.target.value))}>
+              {[1, 2, 3, 4, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
           <span className="text-faint italic basis-full sm:basis-auto">{MODELS.find((m) => m.id === model)?.desc}</span>
