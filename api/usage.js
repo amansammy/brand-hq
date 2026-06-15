@@ -5,8 +5,9 @@
 export default async function handler(req, res) {
   const ACCOUNT = process.env.CF_ACCOUNT_ID
   const TOKEN = process.env.CF_API_TOKEN
+  const HF = !!process.env.HF_TOKEN
   const LIMIT = 10000
-  if (!ACCOUNT || !TOKEN) { res.status(200).json({ configured: false, limit: LIMIT }); return }
+  if (!ACCOUNT || !TOKEN) { res.status(200).json({ configured: false, hf: HF, limit: LIMIT }); return }
 
   const now = new Date()
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)).toISOString()
@@ -26,11 +27,11 @@ export default async function handler(req, res) {
     })
     const j = await r.json()
     const groups = j?.data?.viewer?.accounts?.[0]?.aiInferenceAdaptiveGroups || []
-    if (j?.errors?.length || !groups.length) { res.status(200).json({ configured: true, limit: LIMIT }); return }
+    if (j?.errors?.length || !groups.length) { res.status(200).json({ configured: true, hf: HF, limit: LIMIT }); return }
     const used = groups.reduce((s, g) => s + (g?.sum?.totalNeurons || 0), 0)
     const requests = groups.reduce((s, g) => s + (g?.count || 0), 0)
-    res.status(200).json({ configured: true, limit: LIMIT, used: Math.round(used), requests, remaining: Math.max(0, LIMIT - Math.round(used)) })
+    res.status(200).json({ configured: true, hf: HF, limit: LIMIT, used: Math.round(used), requests, remaining: Math.max(0, LIMIT - Math.round(used)) })
   } catch (e) {
-    res.status(200).json({ configured: true, limit: LIMIT })
+    res.status(200).json({ configured: true, hf: HF, limit: LIMIT })
   }
 }
