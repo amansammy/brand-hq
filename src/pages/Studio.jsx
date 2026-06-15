@@ -123,9 +123,17 @@ export default function Studio() {
           {results.map((item) => (
             <div key={item.seed} className="card overflow-hidden group">
               <div className="relative bg-canvas aspect-square grid place-items-center">
-                {!item.loaded && <div className="absolute inset-0 grid place-items-center"><div className="h-6 w-6 rounded-full border-2 border-line-strong border-t-accent animate-spin" /></div>}
-                <img src={item.url} alt="" className="w-full h-full object-cover"
-                  onLoad={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x))} />
+                {!item.loaded && !item.error && <div className="absolute inset-0 grid place-items-center"><div className="h-6 w-6 rounded-full border-2 border-line-strong border-t-accent animate-spin" /></div>}
+                {item.error ? (
+                  <div className="text-center p-3 text-xs text-faint">
+                    <Icon name="close" size={20} className="mx-auto mb-1 text-accent" />
+                    Couldn't generate
+                  </div>
+                ) : (
+                  <img src={item.url} alt="" className={`w-full h-full object-cover ${item.loaded ? '' : 'opacity-0'}`}
+                    onLoad={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, loaded: true } : x))}
+                    onError={() => setResults((r) => r.map((x) => x.seed === item.seed ? { ...x, error: true } : x))} />
+                )}
               </div>
               <div className="p-2 flex gap-1.5">
                 <button onClick={() => saveToMood(item)} disabled={saved[item.seed]}
