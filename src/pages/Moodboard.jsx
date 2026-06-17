@@ -6,7 +6,10 @@ import { Icon } from '../lib/icons.jsx'
 import { extractPalette } from '../lib/color.js'
 
 export default function Moodboard() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canAdd = can('mood', 'add')
+  const canDelete = can('mood', 'delete')
+  const canBrandEdit = can('brand', 'edit')
   const [items, setItems] = useState([])
   const [boards, setBoards] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +56,7 @@ export default function Moodboard() {
   const allTags = [...new Set(items.flatMap((it) => it.tags || []))]
 
   async function uploadFiles(files) {
+    if (!canAdd) return
     for (const file of files) {
       try {
         const safe = file.name.replace(/[^\w.\-]+/g, '_')
@@ -105,13 +109,13 @@ export default function Moodboard() {
       onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = [...e.dataTransfer.files].filter((x) => x.type.startsWith('image/')); if (f.length) uploadFiles(f) }}
     >
       <PageHeader title="Mood board" subtitle="Boards of inspiration — drag, paste, or generate. Pull colors into your palette."
-        action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add</button>} />
+        action={canAdd && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add</button>} />
 
       {/* Board tabs */}
       <div className="flex items-center gap-1.5 flex-wrap mb-4">
         <BoardTab active={activeBoard === 'all'} onClick={() => setActiveBoard('all')}>All</BoardTab>
         {boards.map((b) => <BoardTab key={b.id} active={activeBoard === b.id} onClick={() => setActiveBoard(b.id)}>{b.name}</BoardTab>)}
-        {newBoard
+        {!canAdd ? null : newBoard
           ? <input autoFocus className="input h-8 w-36 text-sm" placeholder="Board name…"
               onKeyDown={(e) => { if (e.key === 'Enter') createBoard(e.target.value); if (e.key === 'Escape') setNewBoard(false) }}
               onBlur={(e) => e.target.value ? createBoard(e.target.value) : setNewBoard(false)} />
@@ -132,7 +136,7 @@ export default function Moodboard() {
       {filtered.length === 0 ? (
         <EmptyState icon="mood" title="Empty board"
           subtitle="Drop or paste images straight in, add links, search Unsplash, or generate art in the Studio. Tip: drag files anywhere here."
-          action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add inspiration</button>} />
+          action={canAdd && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add inspiration</button>} />
       ) : (
         <div className="columns-2 sm:columns-3 gap-4 [&>*]:mb-4">
           {filtered.map((it, i) => (
@@ -149,8 +153,8 @@ export default function Moodboard() {
               )}
               {it.caption && it.type === 'image' && <p className="text-sm text-muted px-3 py-2">{it.caption}</p>}
               {(it.tags?.length > 0) && <div className="px-3 pb-2 flex flex-wrap gap-1">{it.tags.map((t) => <span key={t} className="chip h-4 px-1.5 bg-canvas border border-line text-faint text-[10px]">{t}</span>)}</div>}
-              <button onClick={(e) => { e.stopPropagation(); remove(it) }}
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" size={14} /></button>
+              {canDelete && <button onClick={(e) => { e.stopPropagation(); remove(it) }}
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash" size={14} /></button>}
             </div>
           ))}
         </div>
@@ -165,6 +169,7 @@ export default function Moodboard() {
       {adding && <AddModal user={user} boardId={boardId} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load() }} />}
       {lightbox !== null && filtered[lightbox] && (
         <Lightbox item={filtered[lightbox]} boards={boards} allTags={allTags}
+          canAdd={canAdd} canDelete={canDelete} canBrandEdit={canBrandEdit}
           hasPrev={lightbox > 0} hasNext={lightbox < filtered.length - 1}
           onPrev={() => setLightbox(lightbox - 1)} onNext={() => setLightbox(lightbox + 1)}
           onClose={() => setLightbox(null)} onTags={updateTags} onMove={moveToBoard} onPalette={addPaletteFromImage} onDelete={remove} />
@@ -177,7 +182,7 @@ function BoardTab({ active, onClick, children }) {
   return <button onClick={onClick} className={`chip h-8 px-3 border ${active ? 'border-accent bg-accent-soft text-accent' : 'border-line text-muted hover:border-line-strong'}`}>{children}</button>
 }
 
-function Lightbox({ item, boards = [], allTags = [], hasPrev, hasNext, onPrev, onNext, onClose, onTags, onMove, onPalette, onDelete }) {
+function Lightbox({ item, boards = [], allTags = [], canAdd, canDelete, canBrandEdit, hasPrev, hasNext, onPrev, onNext, onClose, onTags, onMove, onPalette, onDelete }) {
   const [tag, setTag] = useState('')
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); if (e.key === 'ArrowLeft' && hasPrev) onPrev(); if (e.key === 'ArrowRight' && hasNext) onNext() }
@@ -201,22 +206,24 @@ function Lightbox({ item, boards = [], allTags = [], hasPrev, hasNext, onPrev, o
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             {(item.tags || []).map((t) => (
               <span key={t} className="chip h-6 px-2 bg-canvas border border-line text-muted">{t}
-                <button onClick={() => onTags(item, (item.tags || []).filter((x) => x !== t))} className="text-faint hover:text-accent"><Icon name="close" size={11} /></button></span>
+                {canAdd && <button onClick={() => onTags(item, (item.tags || []).filter((x) => x !== t))} className="text-faint hover:text-accent"><Icon name="close" size={11} /></button>}</span>
             ))}
-            <input className="input h-7 w-28 text-xs" placeholder="+ tag" list="mood-tags" value={tag} onChange={(e) => setTag(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && tag.trim()) { onTags(item, [...new Set([...(item.tags || []), tag.trim()])]); setTag('') } }} />
+            {canAdd && <input className="input h-7 w-28 text-xs" placeholder="+ tag" list="mood-tags" value={tag} onChange={(e) => setTag(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && tag.trim()) { onTags(item, [...new Set([...(item.tags || []), tag.trim()])]); setTag('') } }} />}
             <datalist id="mood-tags">{allTags.map((t) => <option key={t} value={t} />)}</datalist>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {canAdd && (
             <label className="flex items-center gap-1.5 text-xs text-muted">Board
               <select className="input h-8 w-auto text-xs" value={item.board_id || ''} onChange={(e) => onMove(item, e.target.value)}>
                 <option value="">No board</option>
                 {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </label>
-            {item.type === 'image' && <button onClick={() => onPalette(item)} className="btn btn-soft h-8 text-xs"><Icon name="mood" size={14} /> Extract palette</button>}
+            )}
+            {item.type === 'image' && canBrandEdit && <button onClick={() => onPalette(item)} className="btn btn-soft h-8 text-xs"><Icon name="mood" size={14} /> Extract palette</button>}
             <a href={item.url} target="_blank" rel="noreferrer" className="btn btn-soft h-8 text-xs"><Icon name="link" size={14} /> Open</a>
-            <button onClick={() => onDelete(item)} className="btn btn-soft h-8 text-xs text-accent ml-auto"><Icon name="trash" size={14} /> Delete</button>
+            {canDelete && <button onClick={() => onDelete(item)} className="btn btn-soft h-8 text-xs text-accent ml-auto"><Icon name="trash" size={14} /> Delete</button>}
           </div>
         </div>
       </div>

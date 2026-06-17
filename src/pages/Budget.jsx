@@ -8,7 +8,8 @@ import { prettyDate, todayISO } from '../lib/util.js'
 const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-CA', { maximumFractionDigits: 2 })
 
 export default function Budget() {
-  const { user, profiles } = useAuth()
+  const { user, profiles, can } = useAuth()
+  const canEdit = can('budget', 'edit')
   const [expenses, setExpenses] = useState([])
   const [allocations, setAllocations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +54,7 @@ export default function Budget() {
   return (
     <div>
       <PageHeader title="Budget" subtitle="What you're spending, who paid, and what it should sell for."
-        action={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add expense</button>} />
+        action={canEdit && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={16} /> Add expense</button>} />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
@@ -96,7 +97,7 @@ export default function Budget() {
                     </p>
                   </div>
                   <span className="text-sm font-medium shrink-0">{money(e.amount)}</span>
-                  <button onClick={() => removeExpense(e.id)} className="opacity-0 group-hover:opacity-100 text-faint hover:text-accent"><Icon name="trash" size={14} /></button>
+                  {canEdit && <button onClick={() => removeExpense(e.id)} className="opacity-0 group-hover:opacity-100 text-faint hover:text-accent"><Icon name="trash" size={14} /></button>}
                 </div>
               ))}
             </div>
@@ -105,7 +106,7 @@ export default function Budget() {
 
         {/* Allocations + Calculator */}
         <div className="space-y-6">
-          <Allocations allocations={allocations} expenses={expenses} user={user} />
+          <Allocations allocations={allocations} expenses={expenses} user={user} canEdit={canEdit} />
           <PricingCalculator />
         </div>
       </div>
@@ -115,7 +116,7 @@ export default function Budget() {
   )
 }
 
-function Allocations({ allocations, expenses, user }) {
+function Allocations({ allocations, expenses, user, canEdit = true }) {
   const [cat, setCat] = useState('')
   const [amt, setAmt] = useState('')
   const spentByCat = {}
@@ -143,7 +144,7 @@ function Allocations({ allocations, expenses, user }) {
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="font-medium">{a.category}</span>
                 <span className={over ? 'text-accent' : 'text-muted'}>{money(spent)} / {money(a.amount)}
-                  <button onClick={() => remove(a.id)} className="opacity-0 group-hover:opacity-100 text-faint hover:text-accent ml-2"><Icon name="close" size={12} /></button>
+                  {canEdit && <button onClick={() => remove(a.id)} className="opacity-0 group-hover:opacity-100 text-faint hover:text-accent ml-2"><Icon name="close" size={12} /></button>}
                 </span>
               </div>
               <div className="h-1.5 bg-canvas rounded-full overflow-hidden"><div className={`h-full rounded-full ${over ? 'bg-accent' : 'bg-accent/70'}`} style={{ width: `${pct}%` }} /></div>
@@ -151,11 +152,13 @@ function Allocations({ allocations, expenses, user }) {
           )
         })}
       </div>
+      {canEdit && (
       <form onSubmit={add} className="flex gap-2">
         <input className="input h-9 text-sm flex-1 min-w-0" placeholder="Category" value={cat} onChange={(e) => setCat(e.target.value)} />
         <input className="input h-9 text-sm w-24 min-w-0" type="number" placeholder="$" value={amt} onChange={(e) => setAmt(e.target.value)} />
         <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!cat.trim() || !amt}><Icon name="plus" size={15} /></button>
       </form>
+      )}
     </div>
   )
 }

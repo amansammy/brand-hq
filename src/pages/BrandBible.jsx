@@ -6,7 +6,8 @@ import { Icon } from '../lib/icons.jsx'
 import { FONTS, FONT_CATEGORIES, loadFont } from '../lib/fonts.js'
 
 export default function BrandBible() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canEdit = can('brand', 'edit')
   const [bible, setBible] = useState(null)
   const [colors, setColors] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +49,14 @@ export default function BrandBible() {
   }, [load])
 
   async function patch(fields, { log } = {}) {
+    if (!canEdit) return
     await supabase.from('brand_bible').update({ ...fields, updated_by: user.id, updated_at: new Date().toISOString() }).eq('id', 1)
     if (log) logActivity({ verb: 'updated', entity_type: 'brand_bible', summary: `updated the brand bible — ${log}` })
     setBible((b) => ({ ...b, ...fields }))
   }
 
   async function saveText() {
+    if (!canEdit) return
     setSaving(true)
     await patch({ manifesto, typography }, { log: 'manifesto & type' })
     setSaving(false)
@@ -65,7 +68,7 @@ export default function BrandBible() {
   return (
     <div>
       <PageHeader title="Brand bible" subtitle="The single source of truth for who the brand is."
-        action={textDirty && <button onClick={saveText} className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>} />
+        action={canEdit && textDirty && <button onClick={saveText} className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>} />
 
       <div className="space-y-5">
         {/* Logo (auto-set from the Logo Arena winner) */}
@@ -82,7 +85,7 @@ export default function BrandBible() {
 
         {/* Manifesto */}
         <Section icon="notes" title="Manifesto">
-          <textarea className="input min-h-[160px] leading-relaxed font-display text-[15px]"
+          <textarea className="input min-h-[160px] leading-relaxed font-display text-[15px]" readOnly={!canEdit}
             placeholder="What does this brand stand for? Write the manifesto here…"
             value={manifesto} onChange={(e) => setManifesto(e.target.value)} />
         </Section>
@@ -90,29 +93,29 @@ export default function BrandBible() {
         {/* Voice */}
         <Section icon="feed" title="Voice & tone">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <ListEditor label="We sound like" accent="ok" items={bible.voice_do || []}
+            <ListEditor label="We sound like" accent="ok" items={bible.voice_do || []} readOnly={!canEdit}
               onChange={(v) => patch({ voice_do: v })} placeholder="e.g. Confident, warm" />
-            <ListEditor label="We never sound like" accent="no" items={bible.voice_dont || []}
+            <ListEditor label="We never sound like" accent="no" items={bible.voice_dont || []} readOnly={!canEdit}
               onChange={(v) => patch({ voice_dont: v })} placeholder="e.g. Salesy, loud" />
           </div>
         </Section>
 
         {/* Palette */}
         <Section icon="mood" title="Color palette">
-          <Palette colors={colors} user={user} />
+          <Palette colors={colors} user={user} canEdit={canEdit} />
         </Section>
 
         {/* Typography */}
         <Section icon="type" title="Typography">
-          <FontPicker heading={heading} body={bodyFont} onHeading={setHeading} onBody={setBodyFont} />
-          <textarea className="input min-h-[70px] mt-3"
+          <FontPicker heading={heading} body={bodyFont} onHeading={canEdit ? setHeading : undefined} onBody={canEdit ? setBodyFont : undefined} canEdit={canEdit} />
+          <textarea className="input min-h-[70px] mt-3" readOnly={!canEdit}
             placeholder="Usage notes — e.g. Headlines in caps, body at 16px…"
             value={typoNotes} onChange={(e) => setTypoNotes(e.target.value)} />
         </Section>
 
         {/* Taglines */}
         <Section icon="trophy" title="Tagline bank">
-          <ListEditor label="Candidate taglines" items={bible.taglines || []}
+          <ListEditor label="Candidate taglines" items={bible.taglines || []} readOnly={!canEdit}
             onChange={(v) => patch({ taglines: v })} placeholder="Add a tagline idea" big />
         </Section>
       </div>
@@ -120,7 +123,7 @@ export default function BrandBible() {
   )
 }
 
-function FontPicker({ heading, body, onHeading, onBody }) {
+function FontPicker({ heading, body, onHeading, onBody, canEdit = true }) {
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('all')
   const [sample, setSample] = useState('Your brand name')
@@ -159,16 +162,16 @@ function FontPicker({ heading, body, onHeading, onBody }) {
       <div className="border border-line rounded-xl divide-y divide-line max-h-80 overflow-y-auto">
         {list.length === 0 && <p className="text-sm text-faint text-center py-8">No fonts match.</p>}
         {list.map((f) => (
-          <FontRow key={f.name} font={f} sample={sample}
+          <FontRow key={f.name} font={f} sample={sample} canEdit={canEdit}
             isHeading={heading === f.name} isBody={body === f.name}
-            onHeading={() => onHeading(f.name)} onBody={() => onBody(f.name)} />
+            onHeading={() => onHeading?.(f.name)} onBody={() => onBody?.(f.name)} />
         ))}
       </div>
     </div>
   )
 }
 
-function FontRow({ font, sample, isHeading, isBody, onHeading, onBody }) {
+function FontRow({ font, sample, isHeading, isBody, onHeading, onBody, canEdit = true }) {
   const ref = useRef(null)
   const [visible, setVisible] = useState(false)
   useEffect(() => {
@@ -189,10 +192,17 @@ function FontRow({ font, sample, isHeading, isBody, onHeading, onBody }) {
         </p>
         <p className="text-[11px] text-faint">{font.name}</p>
       </div>
+      {canEdit ? (
       <div className="flex gap-1 shrink-0">
         <button onClick={onHeading} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isHeading ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Heading</button>
         <button onClick={onBody} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isBody ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Body</button>
       </div>
+      ) : (
+        <div className="flex gap-1 shrink-0">
+          {isHeading && <span className="chip h-6 px-2 bg-accent-soft text-accent">Heading</span>}
+          {isBody && <span className="chip h-6 px-2 bg-accent-soft text-accent">Body</span>}
+        </div>
+      )}
     </div>
   )
 }
@@ -209,7 +219,7 @@ function Section({ icon, title, children }) {
   )
 }
 
-function ListEditor({ label, items, onChange, placeholder, accent, big }) {
+function ListEditor({ label, items, onChange, placeholder, accent, big, readOnly }) {
   const [val, setVal] = useState('')
   function add(e) {
     e.preventDefault()
@@ -227,19 +237,21 @@ function ListEditor({ label, items, onChange, placeholder, accent, big }) {
           <span key={i} className={`group chip ${big ? 'h-8 px-3' : 'h-7 px-2.5'} bg-canvas border border-line`}>
             {accent && <span className={dot}>{accent === 'ok' ? '✓' : '✕'}</span>}
             {it}
-            <button onClick={() => remove(i)} className="text-faint hover:text-accent ml-0.5"><Icon name="close" size={12} /></button>
+            {!readOnly && <button onClick={() => remove(i)} className="text-faint hover:text-accent ml-0.5"><Icon name="close" size={12} /></button>}
           </span>
         ))}
       </div>
+      {!readOnly && (
       <form onSubmit={add} className="flex gap-2">
         <input className="input h-9 text-sm" placeholder={placeholder} value={val} onChange={(e) => setVal(e.target.value)} />
         <button className="btn btn-soft h-9 px-3 shrink-0" disabled={!val.trim()}><Icon name="plus" size={15} /></button>
       </form>
+      )}
     </div>
   )
 }
 
-function Palette({ colors, user }) {
+function Palette({ colors, user, canEdit = true }) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [hex, setHex] = useState('#bf5b3c')
@@ -257,16 +269,16 @@ function Palette({ colors, user }) {
         {colors.map((c) => (
           <div key={c.id} className="group w-28">
             <div className="h-20 rounded-xl border border-line relative" style={{ background: c.hex }}>
-              <button onClick={() => remove(c)} className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/40 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+              {canEdit && <button onClick={() => remove(c)} className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/40 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Icon name="close" size={13} />
-              </button>
+              </button>}
             </div>
             <p className="text-sm font-medium mt-1.5 truncate">{c.name || c.hex}</p>
             <p className="text-xs text-faint uppercase">{c.hex}{c.code ? ` · ${c.code}` : ''}</p>
           </div>
         ))}
 
-        {adding ? (
+        {!canEdit ? null : adding ? (
           <div className="w-44 card p-3 animate-in">
             <input type="color" value={hex} onChange={(e) => setHex(e.target.value)} className="w-full h-12 rounded-lg cursor-pointer mb-2 border border-line" />
             <input className="input h-8 text-sm mb-2" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />

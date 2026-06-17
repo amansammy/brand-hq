@@ -65,7 +65,10 @@ function dueState(date, status) {
 }
 
 export default function Tasks() {
-  const { user, profiles } = useAuth()
+  const { user, profiles, can } = useAuth()
+  const canCreate = can('tasks', 'create')
+  const canEdit = can('tasks', 'edit')
+  const canDelete = can('tasks', 'delete')
   const [tasks, setTasks] = useState([])
   const [milestones, setMilestones] = useState([])
   const [linkCounts, setLinkCounts] = useState({})
@@ -127,7 +130,7 @@ export default function Tasks() {
   }), [tasks, q, fAssignee, fPriority])
 
   async function setStatus(task, status) {
-    if (task.status === status) return
+    if (!canEdit || task.status === status) return
     setTasks((cur) => cur.map((t) => (t.id === task.id ? { ...t, status } : t)))
     await supabase.from('tasks').update({ status }).eq('id', task.id)
     if (status === 'done') logActivity({ verb: 'completed', entity_type: 'task', entity_id: task.id, summary: `completed a task: ${task.title}`, meta: { title: task.title } })
@@ -144,6 +147,7 @@ export default function Tasks() {
     setMsTitle(''); setMsDate('')
   }
   async function toggleMilestone(m) {
+    if (!canEdit) return
     setMilestones((cur) => cur.map((x) => x.id === m.id ? { ...x, done: !x.done } : x))
     await supabase.from('milestones').update({ done: !m.done }).eq('id', m.id)
   }
@@ -167,7 +171,7 @@ export default function Tasks() {
   return (
     <div>
       <PageHeader title="Tasks & timeline" subtitle="Who's on what, and what's due next."
-        action={<button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> New task</button>} />
+        action={canCreate && <button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> New task</button>} />
 
       {/* Milestones */}
       <div className="card p-4 mb-5">
@@ -182,16 +186,18 @@ export default function Tasks() {
                 <Icon name={m.done ? 'check' : 'flag'} size={13} className={m.done ? 'text-accent' : 'text-faint'} />
                 {m.title}{m.due_date && <span className="text-faint font-normal">· {prettyDate(m.due_date)}</span>}
               </button>
-              <button onClick={() => deleteMilestone(m)} className="text-faint hover:text-accent ml-0.5"><Icon name="close" size={14} /></button>
+              {canDelete && <button onClick={() => deleteMilestone(m)} className="text-faint hover:text-accent ml-0.5"><Icon name="close" size={14} /></button>}
             </div>
           ))}
         </div>
+        {canCreate && (
         <form onSubmit={addMilestone} className="flex flex-col sm:flex-row gap-2">
           <input className="input sm:flex-1 min-w-0" placeholder="Milestone (e.g. Launch drop 01)" value={msTitle} onChange={(e) => setMsTitle(e.target.value)} />
           <input className="input w-full sm:w-44 min-w-0" type="date" min={todayISO()} value={msDate}
             onChange={(e) => { const v = e.target.value; setMsDate(v && v < todayISO() ? todayISO() : v) }} />
           <button className="btn btn-soft shrink-0" disabled={!msTitle.trim()}><Icon name="plus" size={16} /> Add</button>
         </form>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -221,7 +227,7 @@ export default function Tasks() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {COLUMNS.map((col) => (
               <Column key={col.key} col={col} tasks={filtered.filter((t) => t.status === col.key)}
-                byId={byId} linkCounts={linkCounts} blockedIds={blockedIds} onOpen={setEditing} onQuickAdd={async (text) => {
+                byId={byId} linkCounts={linkCounts} blockedIds={blockedIds} canCreate={canCreate} onOpen={setEditing} onQuickAdd={async (text) => {
                   const p = parseQuickAdd(text, profiles)
                   const { data } = await supabase.from('tasks').insert({ title: p.title, status: col.key, priority: p.priority, assignee: p.assignee, due_date: p.due_date, created_by: user.id }).select().single()
                   if (data) logActivity({ verb: 'added', entity_type: 'task', entity_id: data.id, summary: `added a task: ${p.title}`, meta: { title: p.title } })
@@ -233,19 +239,19 @@ export default function Tasks() {
       ) : view === 'list' ? (
         <ListView tasks={filtered} byId={byId} blockedIds={blockedIds} onOpen={setEditing} />
       ) : (
-        <CalendarView tasks={filtered} milestones={milestones} byId={byId}
+        <CalendarView tasks={filtered} milestones={milestones} byId={byId} canCreate={canCreate}
           onOpen={setEditing} onAddOnDay={(d) => { setDefaultDue(d); setEditing('new') }} />
       )}
 
       {editing && <TaskModal task={editing === 'new' ? null : editing} profiles={profiles} user={user}
-        allTasks={tasks} defaultDue={defaultDue}
+        allTasks={tasks} defaultDue={defaultDue} canEdit={canEdit} canDelete={canDelete}
         allLabels={[...new Set(tasks.flatMap((t) => t.labels || []))]}
         onClose={() => { closeEditor(); setDefaultDue(null) }} onDelete={removeTask} />}
     </div>
   )
 }
 
-function Column({ col, tasks, byId, linkCounts, blockedIds, onOpen, onQuickAdd }) {
+function Column({ col, tasks, byId, linkCounts, blockedIds, canCreate, onOpen, onQuickAdd }) {
   const { setNodeRef, isOver } = useDroppable({ id: col.key })
   const [adding, setAdding] = useState(false)
   const [val, setVal] = useState('')
@@ -258,7 +264,7 @@ function Column({ col, tasks, byId, linkCounts, blockedIds, onOpen, onQuickAdd }
       <div ref={setNodeRef} className={`space-y-2.5 min-h-[80px] rounded-xl transition-colors ${isOver ? 'bg-accent-soft/40 outline outline-2 outline-dashed outline-accent/30' : ''}`}>
         {tasks.map((t) => <DraggableCard key={t.id} task={t} byId={byId} links={linkCounts[t.id] || 0} blocked={blockedIds?.has(t.id)} onOpen={onOpen} />)}
       </div>
-      {adding ? (
+      {!canCreate ? null : adding ? (
         <form onSubmit={(e) => { e.preventDefault(); if (val.trim()) { onQuickAdd(val.trim()); setVal(''); setAdding(false) } }} className="mt-2">
           <input autoFocus className="input h-9 text-sm" placeholder="Task title…" value={val}
             onChange={(e) => setVal(e.target.value)} onBlur={() => !val && setAdding(false)} />
@@ -368,7 +374,7 @@ function ListView({ tasks, byId, blockedIds, onOpen }) {
   )
 }
 
-function CalendarView({ tasks, milestones, byId, onOpen, onAddOnDay }) {
+function CalendarView({ tasks, milestones, byId, canCreate, onOpen, onAddOnDay }) {
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const days = eachDayOfInterval({ start: startOfWeek(startOfMonth(month)), end: endOfWeek(endOfMonth(month)) })
   const tasksOn = (d) => tasks.filter((t) => t.due_date && isSameDay(parseISO(t.due_date), d))
@@ -392,8 +398,8 @@ function CalendarView({ tasks, milestones, byId, onOpen, onAddOnDay }) {
           const inMonth = isSameMonth(d, month)
           const ts = tasksOn(d), ms = msOn(d)
           return (
-            <div key={d.toISOString()} onClick={() => onAddOnDay(format(d, 'yyyy-MM-dd'))}
-              className={`min-h-[76px] rounded-lg border p-1 cursor-pointer transition-colors ${inMonth ? 'border-line hover:border-line-strong' : 'border-transparent opacity-40'} ${isToday(d) ? 'bg-accent-soft/40 border-accent/40' : ''}`}>
+            <div key={d.toISOString()} onClick={() => canCreate && onAddOnDay(format(d, 'yyyy-MM-dd'))}
+              className={`min-h-[76px] rounded-lg border p-1 transition-colors ${canCreate ? 'cursor-pointer' : ''} ${inMonth ? 'border-line hover:border-line-strong' : 'border-transparent opacity-40'} ${isToday(d) ? 'bg-accent-soft/40 border-accent/40' : ''}`}>
               <div className="text-[11px] text-faint text-right pr-0.5">{format(d, 'd')}</div>
               <div className="space-y-0.5 mt-0.5">
                 {ms.map((m) => <div key={m.id} className="text-[10px] px-1 py-0.5 rounded bg-accent text-white truncate">⚑ {m.title}</div>)}
@@ -414,7 +420,10 @@ function CalendarView({ tasks, milestones, byId, onOpen, onAddOnDay }) {
   )
 }
 
-function TaskModal({ task, profiles, user, allLabels, allTasks = [], defaultDue, onClose, onDelete }) {
+function TaskModal({ task, profiles, user, allLabels, allTasks = [], defaultDue, canEdit, canDelete, onClose, onDelete }) {
+  // A brand-new task needs create rights; editing an existing one needs edit rights.
+  const canSave = task ? canEdit : true
+  const readOnly = task && !canEdit
   const [title, setTitle] = useState(task?.title || '')
   const [description, setDescription] = useState(task?.description || '')
   const [assignee, setAssignee] = useState(task?.assignee || '')
@@ -457,10 +466,10 @@ function TaskModal({ task, profiles, user, allLabels, allTasks = [], defaultDue,
   }
 
   return (
-    <Modal open onClose={onClose} title={task ? 'Edit task' : 'New task'} maxWidth="max-w-lg"
-      footer={<>{task && <button onClick={() => onDelete(task)} className="btn btn-ghost mr-auto text-accent border-accent-soft"><Icon name="trash" size={15} /> Delete</button>}
-        <button onClick={onClose} className="btn btn-soft">Cancel</button>
-        <button onClick={save} className="btn btn-primary" disabled={!title.trim() || saving}>{saving ? 'Saving…' : 'Save'}</button></>}>
+    <Modal open onClose={onClose} title={readOnly ? 'Task' : task ? 'Edit task' : 'New task'} maxWidth="max-w-lg"
+      footer={<>{task && canDelete && <button onClick={() => onDelete(task)} className="btn btn-ghost mr-auto text-accent border-accent-soft"><Icon name="trash" size={15} /> Delete</button>}
+        <button onClick={onClose} className="btn btn-soft">{readOnly ? 'Close' : 'Cancel'}</button>
+        {canSave && <button onClick={save} className="btn btn-primary" disabled={!title.trim() || saving}>{saving ? 'Saving…' : 'Save'}</button>}</>}>
       <div className="space-y-4">
         <div><label className="label">Title</label>
           <input className="input" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing?" /></div>

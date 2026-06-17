@@ -25,7 +25,10 @@ function genUrl(prompt, modelId, seed, tune) {
 }
 
 export default function Studio() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canGenerate = can('studio', 'generate')
+  const canSaveMood = can('mood', 'add')
+  const canSaveArena = can('arena', 'create')
   const [prompt, setPrompt] = useState('')
   const [type, setType] = useState('logo')
   const [modelId, setModelId] = useState(MODELS[0].id)
@@ -76,7 +79,7 @@ export default function Studio() {
 
   function generate(e) {
     e?.preventDefault()
-    if (!prompt.trim()) return
+    if (!prompt.trim() || !canGenerate) return
     setSaved({})
     const wrapped = TYPES.find((t) => t.key === type).wrap(prompt.trim())
     const base = seedLock ? Number(seedLock) : Math.floor(Math.random() * 1e6)
@@ -117,6 +120,12 @@ export default function Studio() {
     <div>
       <PageHeader title="Design Studio" subtitle="Multi-model image generation — describe it, tune it, generate it." />
 
+      {!canGenerate && (
+        <div className="card p-3 mb-4 flex items-center gap-2 text-sm text-muted">
+          <Icon name="lock" size={15} className="text-faint" /> You have view-only access to the Design Studio.
+        </div>
+      )}
+
       <div className="card p-4 mb-6">
         <div className="flex flex-wrap gap-1.5 mb-3">
           {TYPES.map((t) => (
@@ -134,7 +143,7 @@ export default function Studio() {
                 <select className="input h-10 w-auto" value={count} onChange={(e) => setCount(Number(e.target.value))}>{[1, 2, 3, 4, 6, 8].map((n) => <option key={n} value={n}>{n}</option>)}</select>
                 image{count > 1 ? 's' : ''}
               </label>
-              <button className="btn btn-primary" disabled={!prompt.trim()}><Icon name="wand" size={16} /> Generate</button>
+              <button className="btn btn-primary" disabled={!prompt.trim() || !canGenerate}><Icon name="wand" size={16} /> Generate</button>
             </div>
           </div>
         </form>
@@ -214,8 +223,8 @@ export default function Studio() {
                 </div>
                 {!item.error && (
                   <div className="p-2 flex gap-1.5">
-                    <button onClick={() => persist(item, 'mood')} disabled={saved[item.seed]} className="btn btn-soft h-8 flex-1 text-xs">{saved[item.seed] === 'mood' ? '✓ Saved' : saved[item.seed] === 'saving' ? '…' : <><Icon name="mood" size={13} /> Mood</>}</button>
-                    <button onClick={() => persist(item, 'arena')} disabled={saved[item.seed]} className="btn btn-soft h-8 flex-1 text-xs text-accent">{saved[item.seed] === 'arena' ? '✓ Sent' : saved[item.seed] === 'saving' ? '…' : <><Icon name="trophy" size={13} /> Arena</>}</button>
+                    {canSaveMood && <button onClick={() => persist(item, 'mood')} disabled={saved[item.seed]} className="btn btn-soft h-8 flex-1 text-xs">{saved[item.seed] === 'mood' ? '✓ Saved' : saved[item.seed] === 'saving' ? '…' : <><Icon name="mood" size={13} /> Mood</>}</button>}
+                    {canSaveArena && <button onClick={() => persist(item, 'arena')} disabled={saved[item.seed]} className="btn btn-soft h-8 flex-1 text-xs text-accent">{saved[item.seed] === 'arena' ? '✓ Sent' : saved[item.seed] === 'saving' ? '…' : <><Icon name="trophy" size={13} /> Arena</>}</button>}
                     <a href={item.url} target="_blank" rel="noreferrer" download className="btn btn-soft h-8 px-2 text-xs"><Icon name="download" size={13} /></a>
                   </div>
                 )}

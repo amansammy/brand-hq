@@ -16,7 +16,10 @@ const SAMPLE_STATUS = {
 const Stars = ({ n }) => <span className="text-accent text-xs">{'★'.repeat(n || 0)}<span className="text-line-strong">{'★'.repeat(5 - (n || 0))}</span></span>
 
 export default function Suppliers() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canCreate = can('suppliers', 'create')
+  const canEdit = can('suppliers', 'edit')
+  const canDelete = can('suppliers', 'delete')
   const [suppliers, setSuppliers] = useState([])
   const [samples, setSamples] = useState([])
   const [loading, setLoading] = useState(true)
@@ -53,7 +56,8 @@ export default function Suppliers() {
   const openSupplier = suppliers.find((s) => s.id === openId)
   if (openSupplier) {
     return <SupplierDetail supplier={openSupplier} samples={samples.filter((x) => x.supplier_id === openId)}
-      user={user} onBack={() => { setOpenId(null); setParams({}, { replace: true }) }}
+      user={user} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete}
+      onBack={() => { setOpenId(null); setParams({}, { replace: true }) }}
       onEdit={() => setEditing(openSupplier)} onChange={load}
       editing={editing} setEditing={setEditing} />
   }
@@ -61,12 +65,12 @@ export default function Suppliers() {
   return (
     <div>
       <PageHeader title="Suppliers" subtitle="Manufacturers, mills, printers — and every sample round."
-        action={<button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> New supplier</button>} />
+        action={canCreate && <button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> New supplier</button>} />
 
       {suppliers.length === 0 ? (
         <EmptyState icon="factory" title="No suppliers yet"
           subtitle="Add the manufacturers and fabric mills you're talking to — track MOQ, lead time, quotes, and how each sample round turns out."
-          action={<button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> Add a supplier</button>} />
+          action={canCreate && <button className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> Add a supplier</button>} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {suppliers.map((s) => {
@@ -93,12 +97,13 @@ export default function Suppliers() {
       )}
 
       {editing && !openId && <SupplierModal supplier={editing === 'new' ? null : editing} user={user}
-        onClose={() => setEditing(null)} onChange={load} />}
+        canEdit={canEdit} canDelete={canDelete} onClose={() => setEditing(null)} onChange={load} />}
     </div>
   )
 }
 
-function SupplierModal({ supplier, user, onClose, onChange }) {
+function SupplierModal({ supplier, user, canEdit = true, canDelete, onClose, onChange }) {
+  const canSave = supplier ? canEdit : true
   const [f, setF] = useState({
     name: supplier?.name || '', kind: supplier?.kind || 'manufacturer', contact: supplier?.contact || '',
     location: supplier?.location || '', moq: supplier?.moq || '', lead_time: supplier?.lead_time || '',
@@ -127,9 +132,9 @@ function SupplierModal({ supplier, user, onClose, onChange }) {
 
   return (
     <Modal open onClose={onClose} title={supplier ? 'Edit supplier' : 'New supplier'}
-      footer={<>{supplier && <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>}
-        <button onClick={onClose} className="btn btn-soft">Cancel</button>
-        <button onClick={save} className="btn btn-primary" disabled={!f.name.trim() || busy}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      footer={<>{supplier && canDelete && <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>}
+        <button onClick={onClose} className="btn btn-soft">{canSave ? 'Cancel' : 'Close'}</button>
+        {canSave && <button onClick={save} className="btn btn-primary" disabled={!f.name.trim() || busy}>{busy ? 'Saving…' : 'Save'}</button>}</>}>
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="label">Name</label><input className="input" autoFocus value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Tirupur Knits" /></div>
@@ -157,7 +162,7 @@ function SupplierModal({ supplier, user, onClose, onChange }) {
   )
 }
 
-function SupplierDetail({ supplier, samples, user, onBack, onEdit, onChange, editing, setEditing }) {
+function SupplierDetail({ supplier, samples, user, canCreate, canEdit, canDelete, onBack, onEdit, onChange, editing, setEditing }) {
   const [adding, setAdding] = useState(false)
 
   return (
@@ -175,7 +180,7 @@ function SupplierDetail({ supplier, samples, user, onBack, onEdit, onChange, edi
             </div>
             {supplier.rating ? <Stars n={supplier.rating} /> : null}
           </div>
-          <button onClick={onEdit} className="btn btn-soft h-9 px-3"><Icon name="edit" size={15} /></button>
+          {canEdit && <button onClick={onEdit} className="btn btn-soft h-9 px-3"><Icon name="edit" size={15} /></button>}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
           {supplier.contact && <Field label="Contact" value={supplier.contact} />}
@@ -189,7 +194,7 @@ function SupplierDetail({ supplier, samples, user, onBack, onEdit, onChange, edi
 
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-display text-lg">Samples</h2>
-        <button onClick={() => setAdding(true)} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Log sample</button>
+        {canCreate && <button onClick={() => setAdding(true)} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Log sample</button>}
       </div>
       {samples.length === 0 ? (
         <EmptyState icon="files" title="No samples yet" subtitle="Track each sample round — what you asked for, when it landed, and your verdict." />
@@ -212,7 +217,7 @@ function SupplierDetail({ supplier, samples, user, onBack, onEdit, onChange, edi
       )}
 
       {adding && <SampleModal supplier={supplier} user={user} onClose={() => setAdding(false)} onChange={onChange} />}
-      {editing && editing !== 'new' && <SupplierModal supplier={editing} user={user} onClose={() => setEditing(null)} onChange={onChange} />}
+      {editing && editing !== 'new' && <SupplierModal supplier={editing} user={user} canEdit={canEdit} canDelete={canDelete} onClose={() => setEditing(null)} onChange={onChange} />}
     </div>
   )
 }

@@ -9,7 +9,10 @@ import { BIBLE_ID } from '../lib/links.js'
 import { Icon } from '../lib/icons.jsx'
 
 export default function Arena() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canCreate = can('arena', 'create')
+  const canVote = can('arena', 'vote')
+  const canDelete = can('arena', 'delete')
   const [arenas, setArenas] = useState([])
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
@@ -49,18 +52,18 @@ export default function Arena() {
   const openArena = arenas.find((a) => a.id === openId)
   if (openArena) {
     return <ArenaDetail arena={openArena} candidates={candidates.filter((c) => c.arena_id === openId)}
-      user={user} onBack={back} onChange={load} />
+      user={user} canCreate={canCreate} canVote={canVote} canDelete={canDelete} onBack={back} onChange={load} />
   }
 
   return (
     <div>
       <PageHeader title="Logo arena" subtitle="Upload options, vote, lock the winner."
-        action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New arena</button>} />
+        action={canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New arena</button>} />
 
       {arenas.length === 0 ? (
         <EmptyState icon="trophy" title="No arenas yet"
           subtitle="Create an arena for your logo (or packaging, labels, anything visual). Drop in the options, vote together, and crown a winner."
-          action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create an arena</button>} />
+          action={canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create an arena</button>} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {arenas.map((a) => {
@@ -120,7 +123,7 @@ function ArenaModal({ user, onClose, onDone }) {
   )
 }
 
-function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
+function ArenaDetail({ arena, candidates, user, canCreate, canVote, canDelete, onBack, onChange }) {
   const [adding, setAdding] = useState(false)
   const [comparing, setComparing] = useState(false)
 
@@ -160,8 +163,8 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
         </div>
         <div className="flex gap-2 shrink-0">
           {candidates.length >= 2 && <button onClick={() => setComparing(true)} className="btn btn-soft h-9"><Icon name="layout" size={16} /> Compare</button>}
-          <button onClick={() => setAdding(true)} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Add option</button>
-          <button onClick={deleteArena} className="btn btn-soft h-9 px-3 text-accent"><Icon name="trash" size={15} /></button>
+          {canCreate && <button onClick={() => setAdding(true)} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Add option</button>}
+          {canDelete && <button onClick={deleteArena} className="btn btn-soft h-9 px-3 text-accent"><Icon name="trash" size={15} /></button>}
         </div>
       </div>
 
@@ -187,16 +190,16 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
               <div className="relative bg-canvas">
                 {c.image_url && <img src={c.image_url} alt={c.label || ''} className="w-full max-h-72 object-contain" />}
                 {c.is_winner && <span className="chip absolute top-2 left-2 bg-accent text-white"><Icon name="trophy" size={12} /> Winner</span>}
-                <button onClick={() => removeCandidate(c)} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center hover:bg-black/80">
+                {canDelete && <button onClick={() => removeCandidate(c)} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center hover:bg-black/80">
                   <Icon name="trash" size={13} />
-                </button>
+                </button>}
               </div>
               <div className="p-4">
                 {c.label && <p className="font-medium">{c.label}</p>}
                 {c.rationale && <p className="text-sm text-muted mt-0.5">{c.rationale}</p>}
                 <div className="flex items-center justify-between mt-3 gap-2">
                   <Reactions entityType="candidate" entityId={c.id} showVoters />
-                  {!c.is_winner && <button onClick={() => makeWinner(c)} className="btn btn-soft h-8 px-3 text-accent shrink-0"><Icon name="trophy" size={14} /> Pick winner</button>}
+                  {canVote && !c.is_winner && <button onClick={() => makeWinner(c)} className="btn btn-soft h-8 px-3 text-accent shrink-0"><Icon name="trophy" size={14} /> Pick winner</button>}
                 </div>
                 <div className="mt-3 pt-3 border-t border-line">
                   <Comments entityType="candidate" entityId={c.id} compact />
@@ -214,12 +217,12 @@ function ArenaDetail({ arena, candidates, user, onBack, onChange }) {
       </div>
 
       {adding && <CandidateModal arena={arena} user={user} onClose={() => setAdding(false)} onChange={onChange} />}
-      {comparing && <CompareModal candidates={candidates} onClose={() => setComparing(false)} onPick={(c) => { makeWinner(c); setComparing(false) }} />}
+      {comparing && <CompareModal candidates={candidates} canVote={canVote} onClose={() => setComparing(false)} onPick={(c) => { makeWinner(c); setComparing(false) }} />}
     </div>
   )
 }
 
-function CompareModal({ candidates, onClose, onPick }) {
+function CompareModal({ candidates, canVote, onClose, onPick }) {
   return (
     <Modal open onClose={onClose} title="Compare options" maxWidth="max-w-4xl">
       <div className="flex gap-4 overflow-x-auto pb-2">
@@ -233,9 +236,9 @@ function CompareModal({ candidates, onClose, onPick }) {
               <div className="mt-2 flex items-center justify-between gap-2">
                 <Reactions entityType="candidate" entityId={c.id} showVoters />
               </div>
-              <button onClick={() => onPick(c)} className={`btn h-8 w-full mt-2 text-xs ${c.is_winner ? 'btn-soft text-accent' : 'btn-primary'}`}>
+              {(canVote || c.is_winner) && <button onClick={() => canVote && onPick(c)} disabled={!canVote} className={`btn h-8 w-full mt-2 text-xs ${c.is_winner ? 'btn-soft text-accent' : 'btn-primary'}`}>
                 <Icon name="trophy" size={13} /> {c.is_winner ? 'Winner' : 'Pick this'}
-              </button>
+              </button>}
             </div>
           </div>
         ))}

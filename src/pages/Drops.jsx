@@ -32,7 +32,10 @@ function countdown(date) {
 }
 
 export default function Drops() {
-  const { user } = useAuth()
+  const { user, can } = useAuth()
+  const canCreate = can('drops', 'create')
+  const canEdit = can('drops', 'edit')
+  const canDelete = can('drops', 'delete')
   const [collections, setCollections] = useState([])
   const [garments, setGarments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -72,18 +75,18 @@ export default function Drops() {
   const openCollection = collections.find((c) => c.id === openId)
   if (openCollection) {
     return <CollectionDetail collection={openCollection} garments={garments.filter((g) => g.collection_id === openId)}
-      user={user} onBack={back} onChange={load} />
+      user={user} canCreate={canCreate} canEdit={canEdit} canDelete={canDelete} onBack={back} onChange={load} />
   }
 
   return (
     <div>
       <PageHeader title="Drops" subtitle="Plan collections and the pieces inside them."
-        action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New collection</button>} />
+        action={canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> New collection</button>} />
 
       {collections.length === 0 ? (
         <EmptyState icon="drops" title="No collections yet"
           subtitle="A drop is a collection of garments with a launch date. Create one, then add the pieces and move them from idea to production."
-          action={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create a collection</button>} />
+          action={canCreate && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={16} /> Create a collection</button>} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {collections.map((c) => {
@@ -187,7 +190,7 @@ function CollectionModal({ user, collection, onClose, onDone, onChange }) {
   )
 }
 
-function CollectionDetail({ collection, garments, user, onBack, onChange }) {
+function CollectionDetail({ collection, garments, user, canCreate, canEdit, canDelete, onBack, onChange }) {
   const [editing, setEditing] = useState(false)
   const [garment, setGarment] = useState(null) // garment obj or 'new'
   const cd = countdown(collection.launch_date)
@@ -222,8 +225,8 @@ function CollectionDetail({ collection, garments, user, onBack, onChange }) {
               {collection.launch_date && <p className="text-xs text-faint mt-1 flex items-center gap-1"><Icon name="calendar" size={12} /> {prettyDate(collection.launch_date)}</p>}
             </div>
             <div className="flex gap-2 shrink-0">
-              <button onClick={() => setEditing(true)} className="btn btn-soft h-9 px-3"><Icon name="edit" size={15} /></button>
-              <button onClick={deleteCollection} className="btn btn-soft h-9 px-3 text-accent"><Icon name="trash" size={15} /></button>
+              {canEdit && <button onClick={() => setEditing(true)} className="btn btn-soft h-9 px-3"><Icon name="edit" size={15} /></button>}
+              {canDelete && <button onClick={deleteCollection} className="btn btn-soft h-9 px-3 text-accent"><Icon name="trash" size={15} /></button>}
             </div>
           </div>
           <div className="mt-4 max-w-md">
@@ -240,7 +243,7 @@ function CollectionDetail({ collection, garments, user, onBack, onChange }) {
       {/* Pipeline */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-display text-lg">Pieces</h2>
-        <button onClick={() => setGarment('new')} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Add piece</button>
+        {canCreate && <button onClick={() => setGarment('new')} className="btn btn-primary h-9"><Icon name="plus" size={16} /> Add piece</button>}
       </div>
 
       {garments.length === 0 ? (
@@ -281,12 +284,13 @@ function CollectionDetail({ collection, garments, user, onBack, onChange }) {
 
       {editing && <CollectionModal collection={collection} user={user} onClose={() => setEditing(false)} onChange={onChange} />}
       {garment && <GarmentModal garment={garment === 'new' ? null : garment} collection={collection} user={user}
-        onClose={() => setGarment(null)} onChange={onChange} />}
+        canEdit={canEdit} canDelete={canDelete} onClose={() => setGarment(null)} onChange={onChange} />}
     </div>
   )
 }
 
-function GarmentModal({ garment, collection, user, onClose, onChange }) {
+function GarmentModal({ garment, collection, user, canEdit = true, canDelete, onClose, onChange }) {
+  const canSave = garment ? canEdit : true
   const [name, setName] = useState(garment?.name || '')
   const [category, setCategory] = useState(garment?.category || '')
   const [stage, setStage] = useState(garment?.stage || 'idea')
@@ -319,9 +323,9 @@ function GarmentModal({ garment, collection, user, onClose, onChange }) {
 
   return (
     <Modal open onClose={onClose} title={garment ? 'Edit piece' : 'New piece'}
-      footer={<>{garment && <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>}
-        <button onClick={onClose} className="btn btn-soft">Cancel</button>
-        <button onClick={save} className="btn btn-primary" disabled={!name.trim() || busy}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      footer={<>{garment && canDelete && <button onClick={remove} className="btn btn-ghost text-accent border-accent-soft mr-auto"><Icon name="trash" size={15} /> Delete</button>}
+        <button onClick={onClose} className="btn btn-soft">{canSave ? 'Cancel' : 'Close'}</button>
+        {canSave && <button onClick={save} className="btn btn-primary" disabled={!name.trim() || busy}>{busy ? 'Saving…' : 'Save'}</button>}</>}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div><label className="label">Name</label>
