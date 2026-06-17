@@ -115,10 +115,6 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
 
   const proseAfter = [
     ['aesthetic', 'Aesthetic & design direction'],
-    ['materials', 'Materials & fabrics'],
-    ['fit', 'Fit & silhouette'],
-    ['quality', 'Quality & construction'],
-    ['sizing', 'Sizing approach'],
   ]
   proseAfter.forEach(([k, label]) => { if (sec(k)) { heading(label); para(sec(k)) } })
 

@@ -13,10 +13,6 @@ const PROSE = [
   { key: 'positioning', icon: 'flag', title: 'Positioning', hint: 'In one line — what is this brand? e.g. “Elevated basics for coastal mornings.”' },
   { key: 'audience', icon: 'user', title: 'Who it’s for', hint: 'The person you design for — their age, taste, lifestyle, and what they already wear.' },
   { key: 'aesthetic', icon: 'mood', title: 'Aesthetic & design direction', hint: 'The visual world — keywords, mood, era, textures, silhouettes.' },
-  { key: 'materials', icon: 'drops', title: 'Materials & fabrics', hint: 'Preferred fabrics, weights, finishes, and sourcing standards.' },
-  { key: 'fit', icon: 'tasks', title: 'Fit & silhouette', hint: 'How things should fit — boxy, cropped, oversized, tailored…' },
-  { key: 'quality', icon: 'check', title: 'Quality & construction', hint: 'Stitching, seams, trims — what “made right” means for you.' },
-  { key: 'sizing', icon: 'type', title: 'Sizing approach', hint: 'Size range, fit model, grading notes, inclusivity goals.' },
   { key: 'references', icon: 'image', title: 'References & inspiration', hint: 'Brands, eras, people, places you look to.' },
   { key: 'avoid', icon: 'close', title: 'What we avoid', hint: 'Anti-references — trends, materials, or looks that aren’t us.' },
   { key: 'sustainability', icon: 'heart', title: 'Sustainability & ethics', hint: 'Materials, labour, packaging, end-of-life commitments.' },
@@ -143,8 +139,8 @@ export default function BrandBible() {
             big addLabel="Add a manifesto" />
         </Section>
 
-        {/* Aesthetic / materials / fit / quality / sizing */}
-        {['aesthetic', 'materials', 'fit', 'quality', 'sizing'].map((k) => {
+        {/* Aesthetic */}
+        {['aesthetic'].map((k) => {
           const cfg = PROSE.find((p) => p.key === k)
           return <ProseSection key={k} cfg={cfg} value={sections[k] || ''} onChange={(v) => setSec(k, v)} canEdit={canEdit} />
         })}

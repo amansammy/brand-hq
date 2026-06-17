@@ -7,7 +7,16 @@ import { Comments } from '../components/Discussion.jsx'
 import { LinkedTasks } from '../components/Links.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { prettyDate } from '../lib/util.js'
+import { BIBLE_OPTIONS } from '../lib/bibleOptions.js'
 import { differenceInCalendarDays } from 'date-fns'
+
+// Per-garment spec fields (moved here from the Brand Bible — they vary piece to piece).
+const SPECS = [
+  { key: 'fabric', label: 'Fabric & materials', opts: 'materials', placeholder: 'e.g. 320gsm heavyweight cotton, garment-dyed' },
+  { key: 'fit', label: 'Fit & silhouette', opts: 'fit', placeholder: 'e.g. Oversized, drop-shoulder, boxy crop' },
+  { key: 'sizes', label: 'Sizes', opts: 'sizing', placeholder: 'e.g. XS–XXL, runs oversized — size down' },
+  { key: 'construction', label: 'Quality & construction', opts: 'quality', placeholder: 'e.g. Double-needle stitching, ribbed cuffs, YKK zip' },
+]
 
 const STAGES = [
   { key: 'idea', label: 'Idea' },
@@ -267,6 +276,7 @@ function CollectionDetail({ collection, garments, user, canCreate, canEdit, canD
                         {g.category && <span className="text-xs text-faint">{g.category}</span>}
                         {g.price != null && <span className="text-xs text-muted">${g.price}</span>}
                       </div>
+                      {(g.fit || g.fabric) && <p className="text-[11px] text-faint truncate mt-0.5">{[g.fit, g.fabric].filter(Boolean).join(' · ')}</p>}
                     </button>
                   ))}
                 </div>
@@ -289,6 +299,35 @@ function CollectionDetail({ collection, garments, user, canCreate, canEdit, canD
   )
 }
 
+// A spec input with tap-to-add streetwear suggestions (reuses the Bible option lists).
+function SpecField({ cfg, value, onChange }) {
+  const options = BIBLE_OPTIONS[cfg.opts] || []
+  const has = (o) => value.toLowerCase().includes(o.toLowerCase())
+  function append(o) {
+    const cur = value.trim()
+    if (!cur) return onChange(o)
+    if (has(o)) return
+    const sep = /[,\n]\s*$/.test(value) ? ' ' : ', '
+    onChange(value + sep + o)
+  }
+  return (
+    <div>
+      <label className="label">{cfg.label}</label>
+      <input className="input" placeholder={cfg.placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      {options.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {options.filter((o) => !has(o)).slice(0, 14).map((o) => (
+            <button key={o} type="button" onClick={() => append(o)}
+              className="chip h-6 px-2 border border-line text-faint hover:border-accent hover:text-accent transition-colors text-[11px]">
+              + {o}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function GarmentModal({ garment, collection, user, canEdit = true, canDelete, onClose, onChange }) {
   const canSave = garment ? canEdit : true
   const [name, setName] = useState(garment?.name || '')
@@ -296,9 +335,13 @@ function GarmentModal({ garment, collection, user, canEdit = true, canDelete, on
   const [stage, setStage] = useState(garment?.stage || 'idea')
   const [price, setPrice] = useState(garment?.price ?? '')
   const [notes, setNotes] = useState(garment?.notes || '')
+  const [specs, setSpecs] = useState(() => {
+    const o = {}; SPECS.forEach((s) => { o[s.key] = garment?.[s.key] || '' }); return o
+  })
   const [img, setImg] = useState(null)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef()
+  const setSpec = (k, v) => setSpecs((s) => ({ ...s, [k]: v }))
 
   async function save() {
     if (!name.trim()) return
@@ -306,7 +349,9 @@ function GarmentModal({ garment, collection, user, canEdit = true, canDelete, on
     try {
       let imgPatch = {}
       if (img) { const { url, path } = await uploadPublicImage('brand', img, 'garments'); imgPatch = { image_url: url, image_path: path } }
-      const payload = { name: name.trim(), category: category.trim() || null, stage, price: price === '' ? null : Number(price), notes: notes.trim() || null, ...imgPatch }
+      const specPatch = {}
+      SPECS.forEach((s) => { specPatch[s.key] = specs[s.key].trim() || null })
+      const payload = { name: name.trim(), category: category.trim() || null, stage, price: price === '' ? null : Number(price), notes: notes.trim() || null, ...specPatch, ...imgPatch }
       if (garment) {
         await supabase.from('garments').update(payload).eq('id', garment.id)
       } else {
@@ -341,8 +386,13 @@ function GarmentModal({ garment, collection, user, canEdit = true, canDelete, on
           <div><label className="label">Target price ($)</label>
             <input className="input" type="number" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
+        {/* Per-piece specs */}
+        {SPECS.map((s) => (
+          <SpecField key={s.key} cfg={s} value={specs[s.key]} onChange={(v) => setSpec(s.key, v)} />
+        ))}
+
         <div><label className="label">Notes</label>
-          <textarea className="input" rows={3} placeholder="Fabric, fit, references…" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+          <textarea className="input" rows={2} placeholder="Anything else — references, fit notes, to-dos…" value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
         <div><label className="label">Sketch / photo</label>
           <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-soft w-full">
             <Icon name="image" size={16} /> {img ? img.name : (garment?.image_url ? 'Replace image' : 'Add image')}
