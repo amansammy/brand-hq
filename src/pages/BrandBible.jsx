@@ -38,6 +38,13 @@ export default function BrandBible() {
   const typoEmpty = !heading && !bodyFont && !typoNotes
   const typography = typoEmpty ? '' : JSON.stringify({ heading, body: bodyFont, notes: typoNotes })
 
+  // Mirror current editable values + the last-saved baseline, so a live reload
+  // (e.g. someone adds a tagline) never wipes edits you haven't saved yet.
+  const sectionsRef = useRef(sections); sectionsRef.current = sections
+  const typoRef = useRef(typography); typoRef.current = typography
+  const savedSectionsRef = useRef(null)
+  const savedTypoRef = useRef(null)
+
   const load = useCallback(async () => {
     const [b, c, e] = await Promise.all([
       supabase.from('brand_bible').select('*').eq('id', 1).single(),
@@ -46,12 +53,25 @@ export default function BrandBible() {
     ])
     if (b.data) {
       setBible(b.data)
-      setSections(b.data.sections || {})
-      let h = '', bo = '', no = ''
-      try { const t = JSON.parse(b.data.typography || ''); if (t && typeof t === 'object') { h = t.heading || ''; bo = t.body || ''; no = t.notes || '' } else { no = b.data.typography || '' } }
-      catch { no = b.data.typography || '' }
-      setHeading(h); setBodyFont(bo); setTypoNotes(no)
-      if (h) loadFont(h); if (bo) loadFont(bo)
+
+      // Sections — only overwrite local state if it isn't holding unsaved edits.
+      const newSections = b.data.sections || {}
+      const sectionsClean = savedSectionsRef.current === null ||
+        JSON.stringify(sectionsRef.current) === JSON.stringify(savedSectionsRef.current)
+      if (sectionsClean) setSections(newSections)
+      savedSectionsRef.current = newSections
+
+      // Typography — same guard.
+      const newTypo = b.data.typography || ''
+      const typoClean = savedTypoRef.current === null || typoRef.current === savedTypoRef.current
+      if (typoClean) {
+        let h = '', bo = '', no = ''
+        try { const t = JSON.parse(newTypo); if (t && typeof t === 'object') { h = t.heading || ''; bo = t.body || ''; no = t.notes || '' } else { no = newTypo } }
+        catch { no = newTypo }
+        setHeading(h); setBodyFont(bo); setTypoNotes(no)
+        if (h) loadFont(h); if (bo) loadFont(bo)
+      }
+      savedTypoRef.current = newTypo
     }
     setColors(c.data || [])
     setEntries(e.data || [])
