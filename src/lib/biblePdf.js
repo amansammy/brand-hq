@@ -1,0 +1,172 @@
+// Load an image URL into a data URL so jsPDF can embed it. Returns null on failure.
+function loadImage(url) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth; c.height = img.naturalHeight
+        c.getContext('2d').drawImage(img, 0, 0)
+        resolve({ data: c.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight })
+      } catch (e) { resolve(null) }
+    }
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
+
+// Build & download a formatted Brand Bible PDF.
+// args: { bible, colors, manifestos, taglines, nameOf } where nameOf(userId) -> display name.
+export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [], taglines = [], nameOf = () => '' }) {
+  const { jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const PW = doc.internal.pageSize.getWidth()
+  const PH = doc.internal.pageSize.getHeight()
+  const M = 54
+  const CW = PW - M * 2
+  let y = M
+
+  const INK = [28, 25, 23]
+  const MUTED = [120, 113, 108]
+  const ACCENT = [191, 91, 60]
+  const LINE = [231, 226, 222]
+
+  function ensure(space) {
+    if (y + space > PH - M) { doc.addPage(); y = M }
+  }
+  function heading(text) {
+    ensure(40)
+    y += 8
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...ACCENT)
+    doc.text(text.toUpperCase(), M, y)
+    y += 8
+    doc.setDrawColor(...LINE); doc.setLineWidth(1)
+    doc.line(M, y, M + CW, y)
+    y += 16
+  }
+  function para(text, { size = 11, color = INK, gap = 6, font = 'normal' } = {}) {
+    if (!text) return
+    doc.setFont('helvetica', font); doc.setFontSize(size); doc.setTextColor(...color)
+    const lines = doc.splitTextToSize(String(text), CW)
+    for (const ln of lines) {
+      ensure(size + 4)
+      doc.text(ln, M, y)
+      y += size + 4
+    }
+    y += gap
+  }
+
+  // ---- Title ----
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(30); doc.setTextColor(...INK)
+  doc.text('Brand Bible', M, y + 18); y += 34
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MUTED)
+  doc.text(`Exported ${new Date().toLocaleDateString()}`, M, y); y += 18
+
+  // ---- Logo ----
+  const logo = await loadImage(bible.logo_url)
+  if (logo) {
+    ensure(110)
+    const maxH = 90, maxW = 180
+    let w = logo.w, h = logo.h
+    const scale = Math.min(maxW / w, maxH / h, 1)
+    w *= scale; h *= scale
+    try { doc.addImage(logo.data, 'PNG', M, y, w, h) } catch (e) {}
+    y += h + 18
+  }
+
+  const S = bible.sections || {}
+  const sec = (k) => (S[k] || '').trim()
+
+  if (sec('positioning')) { heading('Positioning'); para(sec('positioning'), { size: 13 }) }
+  if (sec('audience')) { heading('Who it’s for'); para(sec('audience')) }
+
+  // ---- Manifestos ----
+  if (manifestos.length) {
+    heading(manifestos.length > 1 ? 'Manifestos' : 'Manifesto')
+    manifestos.forEach((m, i) => {
+      para(m.content, { size: 12 })
+      para(`— ${nameOf(m.created_by) || 'Unknown'}`, { size: 10, color: MUTED, font: 'italic', gap: i === manifestos.length - 1 ? 6 : 14 })
+    })
+  }
+
+  const proseAfter = [
+    ['aesthetic', 'Aesthetic & design direction'],
+    ['materials', 'Materials & fabrics'],
+    ['fit', 'Fit & silhouette'],
+    ['quality', 'Quality & construction'],
+    ['sizing', 'Sizing approach'],
+  ]
+  proseAfter.forEach(([k, label]) => { if (sec(k)) { heading(label); para(sec(k)) } })
+
+  // ---- Design principles ----
+  const dos = bible.voice_do || [], donts = bible.voice_dont || []
+  if (dos.length || donts.length) {
+    heading('Design principles')
+    if (dos.length) { para('We always', { size: 11, font: 'bold', gap: 2 }); dos.forEach((d) => para(`•  ${d}`, { gap: 1 })); y += 6 }
+    if (donts.length) { para('We never', { size: 11, font: 'bold', gap: 2 }); donts.forEach((d) => para(`•  ${d}`, { gap: 1 })) }
+  }
+
+  // ---- Palette ----
+  if (colors.length) {
+    heading('Colour palette')
+    const sw = 70, gap = 12, perRow = Math.floor((CW + gap) / (sw + gap))
+    let i = 0
+    while (i < colors.length) {
+      ensure(sw + 34)
+      const rowY = y
+      for (let col = 0; col < perRow && i < colors.length; col++, i++) {
+        const c = colors[i]
+        const x = M + col * (sw + gap)
+        const rgb = hexToRgb(c.hex)
+        doc.setFillColor(...rgb); doc.setDrawColor(...LINE)
+        doc.roundedRect(x, rowY, sw, sw, 6, 6, 'FD')
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...INK)
+        doc.text(doc.splitTextToSize(c.name || c.hex, sw), x, rowY + sw + 12)
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+        doc.text(`${(c.hex || '').toUpperCase()}${c.code ? ' · ' + c.code : ''}`, x, rowY + sw + 22)
+      }
+      y = rowY + sw + 34
+    }
+  }
+
+  // ---- Typography ----
+  const typo = parseTypo(bible.typography)
+  if (typo.heading || typo.body || typo.notes) {
+    heading('Typography')
+    if (typo.heading) para(`Heading:  ${typo.heading}`, { gap: 2 })
+    if (typo.body) para(`Body:  ${typo.body}`, { gap: 2 })
+    if (typo.notes) { y += 4; para(typo.notes, { color: MUTED }) }
+  }
+
+  const proseEnd = [
+    ['references', 'References & inspiration'],
+    ['avoid', 'What we avoid'],
+    ['sustainability', 'Sustainability & ethics'],
+  ]
+  proseEnd.forEach(([k, label]) => { if (sec(k)) { heading(label); para(sec(k)) } })
+
+  // ---- Taglines ----
+  if (taglines.length) {
+    heading('Taglines')
+    taglines.forEach((t) => {
+      para(`“${t.content}”`, { size: 12, gap: 1 })
+      para(`— ${nameOf(t.created_by) || 'Unknown'}`, { size: 9, color: MUTED, font: 'italic', gap: 10 })
+    })
+  }
+
+  doc.save('brand-bible.pdf')
+}
+
+function hexToRgb(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || '').trim())
+  if (!m) return [200, 200, 200]
+  const n = parseInt(m[1], 16)
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+function parseTypo(raw) {
+  try { const t = JSON.parse(raw || ''); if (t && typeof t === 'object') return { heading: t.heading || '', body: t.body || '', notes: t.notes || '' } } catch (e) {}
+  return { heading: '', body: '', notes: raw || '' }
+}
