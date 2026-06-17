@@ -73,7 +73,7 @@ export default function NotificationBell({ variant = 'sidebar' }) {
       <button onClick={() => setOpen((o) => !o)} className={btnClass}>
         <span className="relative">
           <Icon name="bell" size={variant === 'sidebar' ? 18 : 19} />
-          {unread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-accent text-white text-[10px] font-semibold grid place-items-center">{unread > 9 ? '9+' : unread}</span>}
+          {unread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-1 rounded-full bg-accent text-on-accent text-[10px] font-semibold grid place-items-center">{unread > 9 ? '9+' : unread}</span>}
         </span>
         {variant === 'sidebar' && <span>Notifications</span>}
       </button>

@@ -189,7 +189,7 @@ function ArenaDetail({ arena, candidates, user, canCreate, canVote, canDelete, o
             <div key={c.id} className={`card overflow-hidden ${c.is_winner ? 'ring-2 ring-accent' : ''}`}>
               <div className="relative bg-canvas">
                 {c.image_url && <img src={c.image_url} alt={c.label || ''} className="w-full max-h-72 object-contain" />}
-                {c.is_winner && <span className="chip absolute top-2 left-2 bg-accent text-white"><Icon name="trophy" size={12} /> Winner</span>}
+                {c.is_winner && <span className="chip absolute top-2 left-2 bg-accent text-on-accent"><Icon name="trophy" size={12} /> Winner</span>}
                 {canDelete && <button onClick={() => removeCandidate(c)} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 text-white grid place-items-center hover:bg-black/80">
                   <Icon name="trash" size={13} />
                 </button>}

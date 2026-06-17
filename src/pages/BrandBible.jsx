@@ -369,8 +369,8 @@ function FontRow({ font, sample, isHeading, isBody, onHeading, onBody }) {
         <p className="text-[11px] text-faint">{font.name}</p>
       </div>
       <div className="flex gap-1 shrink-0">
-        <button onClick={onHeading} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isHeading ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Heading</button>
-        <button onClick={onBody} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isBody ? 'border-accent bg-accent text-white' : 'border-line text-muted hover:border-line-strong'}`}>Body</button>
+        <button onClick={onHeading} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isHeading ? 'border-accent bg-accent text-on-accent' : 'border-line text-muted hover:border-line-strong'}`}>Heading</button>
+        <button onClick={onBody} className={`h-7 px-2 rounded-lg text-xs font-medium border ${isBody ? 'border-accent bg-accent text-on-accent' : 'border-line text-muted hover:border-line-strong'}`}>Body</button>
       </div>
     </div>
   )

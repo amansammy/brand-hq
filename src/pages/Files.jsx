@@ -245,7 +245,7 @@ function FileDetail({ fileId, file, versions, profiles, user, canUpload, canEdit
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium truncate">{v.file_name || 'file'}</p>
-                {v.is_final && <span className="chip bg-accent text-white">Final</span>}
+                {v.is_final && <span className="chip bg-accent text-on-accent">Final</span>}
               </div>
               <p className="text-xs text-faint">
                 {fileSize(v.size_bytes)} · {byId(v.uploaded_by).display_name} · {timeAgo(v.created_at)}

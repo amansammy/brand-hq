@@ -402,7 +402,7 @@ function CalendarView({ tasks, milestones, byId, canCreate, onOpen, onAddOnDay }
               className={`min-h-[76px] rounded-lg border p-1 transition-colors ${canCreate ? 'cursor-pointer' : ''} ${inMonth ? 'border-line hover:border-line-strong' : 'border-transparent opacity-40'} ${isToday(d) ? 'bg-accent-soft/40 border-accent/40' : ''}`}>
               <div className="text-[11px] text-faint text-right pr-0.5">{format(d, 'd')}</div>
               <div className="space-y-0.5 mt-0.5">
-                {ms.map((m) => <div key={m.id} className="text-[10px] px-1 py-0.5 rounded bg-accent text-white truncate">⚑ {m.title}</div>)}
+                {ms.map((m) => <div key={m.id} className="text-[10px] px-1 py-0.5 rounded bg-accent text-on-accent truncate">⚑ {m.title}</div>)}
                 {ts.slice(0, 3).map((t) => (
                   <div key={t.id} onClick={(e) => { e.stopPropagation(); onOpen(t) }}
                     className="text-[10px] px-1 py-0.5 rounded bg-canvas border border-line truncate flex items-center gap-1 hover:border-line-strong">
@@ -524,7 +524,7 @@ function TaskModal({ task, profiles, user, allLabels, allTasks = [], defaultDue,
           <div className={`space-y-1.5 ${subtasks.length ? 'mb-2' : ''}`}>
             {subtasks.map((s, i) => (
               <div key={i} className="flex items-center gap-2 group">
-                <button onClick={() => toggleSub(i)} className={`h-5 w-5 rounded-md border grid place-items-center shrink-0 ${s.done ? 'bg-accent border-accent text-white' : 'border-line-strong'}`}>
+                <button onClick={() => toggleSub(i)} className={`h-5 w-5 rounded-md border grid place-items-center shrink-0 ${s.done ? 'bg-accent border-accent text-on-accent' : 'border-line-strong'}`}>
                   {s.done && <Icon name="check" size={13} />}
                 </button>
                 <span className={`text-sm flex-1 ${s.done ? 'line-through text-faint' : ''}`}>{s.text}</span>

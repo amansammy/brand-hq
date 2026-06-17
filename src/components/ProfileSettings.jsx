@@ -40,7 +40,7 @@ export default function ProfileSettings({ onClose }) {
         <div className="relative">
           {preview ? <img src={preview} alt="" className="h-16 w-16 rounded-full object-cover" /> : <Avatar profile={{ ...me, display_name: name }} size={64} />}
           <button onClick={() => inputRef.current?.click()}
-            className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-accent text-white grid place-items-center border-2 border-surface">
+            className="absolute -bottom-1 -right-1 h-7 w-7 rounded-full bg-accent text-on-accent grid place-items-center border-2 border-surface">
             <Icon name="edit" size={13} />
           </button>
           <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={chooseAvatar} />
