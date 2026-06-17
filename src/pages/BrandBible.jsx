@@ -5,6 +5,7 @@ import { Avatar, Spinner, PageHeader } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
 import { FONTS, FONT_CATEGORIES, loadFont } from '../lib/fonts.js'
 import { exportBiblePdf } from '../lib/biblePdf.js'
+import { BIBLE_OPTIONS } from '../lib/bibleOptions.js'
 import { timeAgo } from '../lib/util.js'
 
 // Clothing-brand context fields, stored in brand_bible.sections (jsonb).
@@ -189,12 +190,40 @@ export default function BrandBible() {
 }
 
 // A single free-text context section saved into brand_bible.sections.
+// Offers curated, clickable streetwear suggestions that append into the field.
 function ProseSection({ cfg, value, onChange, canEdit }) {
+  const options = BIBLE_OPTIONS[cfg.key] || []
+  // crude "already added" check so picked chips drop out of the list
+  const has = (opt) => value.toLowerCase().includes(opt.toLowerCase())
+
+  function append(opt) {
+    const cur = value.trim()
+    if (!cur) return onChange(opt)
+    if (has(opt)) return
+    const sep = /[,\n]\s*$/.test(value) ? ' ' : ', '
+    onChange(value + sep + opt)
+  }
+
   return (
     <Section icon={cfg.icon} title={cfg.title}>
       {canEdit ? (
-        <textarea className="input min-h-[80px] leading-relaxed" placeholder={cfg.hint}
-          value={value} onChange={(e) => onChange(e.target.value)} />
+        <>
+          <textarea className="input min-h-[80px] leading-relaxed" placeholder={cfg.hint}
+            value={value} onChange={(e) => onChange(e.target.value)} />
+          {options.length > 0 && (
+            <div className="mt-2.5">
+              <p className="text-xs text-faint mb-1.5">Tap to add — streetwear suggestions:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {options.filter((o) => !has(o)).map((o) => (
+                  <button key={o} type="button" onClick={() => append(o)}
+                    className="chip h-7 px-2.5 border border-line text-muted hover:border-accent hover:text-accent transition-colors">
+                    <Icon name="plus" size={11} /> {o}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       ) : value ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{value}</p>
       ) : (

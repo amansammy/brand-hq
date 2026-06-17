@@ -33,13 +33,35 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   const ACCENT = [191, 91, 60]
   const LINE = [231, 226, 222]
 
+  // ---- Embed the brand's chosen fonts (from the Typography section) ----
+  const typo = parseTypo(bible.typography)
+  const F = { H: null, B: null, BB: null, custom: false }
+  if (typo.heading) F.H = await registerFont(doc, typo.heading, 700) || await registerFont(doc, typo.heading, 400)
+  const bodyName = typo.body || typo.heading
+  if (bodyName) {
+    F.B = await registerFont(doc, bodyName, 400)
+    F.BB = await registerFont(doc, bodyName, 700)
+  }
+  if (F.H || F.B) {
+    F.custom = true
+    F.H = F.H || F.B; F.B = F.B || F.H; F.BB = F.BB || F.B
+  }
+  // role ∈ 'heading' | 'body' | 'bold' | 'italic'
+  function applyFont(role) {
+    if (F.custom) {
+      doc.setFont(role === 'heading' ? F.H : role === 'bold' ? F.BB : F.B, 'normal')
+    } else {
+      doc.setFont('helvetica', role === 'heading' || role === 'bold' ? 'bold' : role === 'italic' ? 'italic' : 'normal')
+    }
+  }
+
   function ensure(space) {
     if (y + space > PH - M) { doc.addPage(); y = M }
   }
   function heading(text) {
     ensure(40)
     y += 8
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.setTextColor(...ACCENT)
+    applyFont('heading'); doc.setFontSize(13); doc.setTextColor(...ACCENT)
     doc.text(text.toUpperCase(), M, y)
     y += 8
     doc.setDrawColor(...LINE); doc.setLineWidth(1)
@@ -48,7 +70,7 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   }
   function para(text, { size = 11, color = INK, gap = 6, font = 'normal' } = {}) {
     if (!text) return
-    doc.setFont('helvetica', font); doc.setFontSize(size); doc.setTextColor(...color)
+    applyFont(font); doc.setFontSize(size); doc.setTextColor(...color)
     const lines = doc.splitTextToSize(String(text), CW)
     for (const ln of lines) {
       ensure(size + 4)
@@ -59,10 +81,10 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   }
 
   // ---- Title ----
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(30); doc.setTextColor(...INK)
-  doc.text('Brand Bible', M, y + 18); y += 34
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MUTED)
-  doc.text(`Exported ${new Date().toLocaleDateString()}`, M, y); y += 18
+  applyFont('heading'); doc.setFontSize(32); doc.setTextColor(...INK)
+  doc.text('Saint Monarch', M, y + 20); y += 36
+  applyFont('body'); doc.setFontSize(10); doc.setTextColor(...MUTED)
+  doc.text(`Brand bible · exported ${new Date().toLocaleDateString()}`, M, y); y += 18
 
   // ---- Logo ----
   const logo = await loadImage(bible.logo_url)
@@ -122,9 +144,9 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
         const rgb = hexToRgb(c.hex)
         doc.setFillColor(...rgb); doc.setDrawColor(...LINE)
         doc.roundedRect(x, rowY, sw, sw, 6, 6, 'FD')
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...INK)
+        applyFont('bold'); doc.setFontSize(8); doc.setTextColor(...INK)
         doc.text(doc.splitTextToSize(c.name || c.hex, sw), x, rowY + sw + 12)
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUTED)
+        applyFont('body'); doc.setTextColor(...MUTED)
         doc.text(`${(c.hex || '').toUpperCase()}${c.code ? ' · ' + c.code : ''}`, x, rowY + sw + 22)
       }
       y = rowY + sw + 34
@@ -132,7 +154,6 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   }
 
   // ---- Typography ----
-  const typo = parseTypo(bible.typography)
   if (typo.heading || typo.body || typo.notes) {
     heading('Typography')
     if (typo.heading) para(`Heading:  ${typo.heading}`, { gap: 2 })
@@ -164,6 +185,41 @@ function hexToRgb(hex) {
   if (!m) return [200, 200, 200]
   const n = parseInt(m[1], 16)
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+}
+
+// Fetch a TTF for a Google font (via Fontsource's CDN) and register it with jsPDF.
+// Returns the internal font name, or null if unavailable.
+const _fontCache = {}
+async function registerFont(doc, family, weight) {
+  if (!family) return null
+  const slug = family.toLowerCase().trim().replace(/\s+/g, '-')
+  const key = `${slug}-${weight}`
+  try {
+    if (_fontCache[key] === null) return null
+    let b64 = _fontCache[key]
+    if (!b64) {
+      const url = `https://cdn.jsdelivr.net/fontsource/fonts/${slug}@latest/latin-${weight}-normal.ttf`
+      const res = await fetch(url)
+      if (!res.ok) { _fontCache[key] = null; return null }
+      b64 = arrayBufferToBase64(await res.arrayBuffer())
+      _fontCache[key] = b64
+    }
+    const internal = `f_${slug}_${weight}`.replace(/[^a-z0-9_]/gi, '_')
+    const fname = `${internal}.ttf`
+    doc.addFileToVFS(fname, b64)
+    doc.addFont(fname, internal, 'normal')
+    return internal
+  } catch (e) { _fontCache[key] = null; return null }
+}
+
+function arrayBufferToBase64(buf) {
+  let binary = ''
+  const bytes = new Uint8Array(buf)
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
 }
 
 function parseTypo(raw) {
