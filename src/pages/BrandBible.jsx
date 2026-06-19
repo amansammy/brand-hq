@@ -24,6 +24,7 @@ export default function BrandBible() {
   const [bible, setBible] = useState(null)
   const [colors, setColors] = useState([])
   const [entries, setEntries] = useState([])
+  const [boards, setBoards] = useState([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const nameOf = (id) => profiles.find((p) => p.id === id)?.display_name || 'Someone'
@@ -46,11 +47,13 @@ export default function BrandBible() {
   const savedTypoRef = useRef(null)
 
   const load = useCallback(async () => {
-    const [b, c, e] = await Promise.all([
+    const [b, c, e, bd] = await Promise.all([
       supabase.from('brand_bible').select('*').eq('id', 1).single(),
       supabase.from('palette_colors').select('*').order('position').order('created_at'),
       supabase.from('bible_entries').select('*').order('position').order('created_at'),
+      supabase.from('boards').select('id,name').order('created_at'),
     ])
+    setBoards(bd.data || [])
     if (b.data) {
       setBible(b.data)
 
@@ -108,9 +111,17 @@ export default function BrandBible() {
   async function exportPdf() {
     setExporting(true)
     try {
+      let referenceImages = []
+      const boardId = sections.references_board
+      if (boardId) {
+        const { data } = await supabase.from('moodboard_items')
+          .select('url,type').eq('board_id', boardId).eq('type', 'image')
+          .order('created_at', { ascending: false })
+        referenceImages = (data || []).map((r) => r.url).filter(Boolean)
+      }
       await exportBiblePdf({
         bible: { ...(bible || {}), sections, typography },
-        colors, manifestos, taglines, nameOf,
+        colors, manifestos, taglines, referenceImages, nameOf,
       })
     } finally { setExporting(false) }
   }
@@ -189,8 +200,12 @@ export default function BrandBible() {
             value={typoNotes} onChange={(e) => setTypoNotes(e.target.value)} />
         </Section>
 
-        {/* References / avoid / sustainability */}
-        {['references', 'avoid', 'sustainability'].map((k) => {
+        {/* References — text + optional mood board whose images go into the PDF */}
+        <ProseSection cfg={PROSE.find((p) => p.key === 'references')} value={sections.references || ''} onChange={(v) => setSec('references', v)} canEdit={canEdit}
+          extra={<BoardPicker boards={boards} value={sections.references_board || ''} onChange={(v) => setSec('references_board', v)} canEdit={canEdit} />} />
+
+        {/* Avoid / sustainability */}
+        {['avoid', 'sustainability'].map((k) => {
           const cfg = PROSE.find((p) => p.key === k)
           return <ProseSection key={k} cfg={cfg} value={sections[k] || ''} onChange={(v) => setSec(k, v)} canEdit={canEdit} />
         })}
@@ -207,7 +222,7 @@ export default function BrandBible() {
 
 // A single free-text context section saved into brand_bible.sections.
 // Offers curated, clickable streetwear suggestions that append into the field.
-function ProseSection({ cfg, value, onChange, canEdit }) {
+function ProseSection({ cfg, value, onChange, canEdit, extra }) {
   const options = BIBLE_OPTIONS[cfg.key] || []
   // crude "already added" check so picked chips drop out of the list
   const has = (opt) => value.toLowerCase().includes(opt.toLowerCase())
@@ -245,7 +260,31 @@ function ProseSection({ cfg, value, onChange, canEdit }) {
       ) : (
         <p className="text-sm text-faint italic">Nothing added yet.</p>
       )}
+      {extra}
     </Section>
+  )
+}
+
+// Pick a mood board whose images get embedded into the exported PDF.
+function BoardPicker({ boards, value, onChange, canEdit }) {
+  const selected = boards.find((b) => b.id === value)
+  return (
+    <div className="mt-3 pt-3 border-t border-line">
+      <label className="label flex items-center gap-1.5"><Icon name="mood" size={13} className="text-accent" /> Reference board for the PDF</label>
+      {canEdit ? (
+        <select className="input h-9 text-sm w-auto min-w-[220px]" value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">None — don’t include images</option>
+          {boards.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      ) : (
+        <p className="text-sm text-muted">{selected ? selected.name : 'No board selected'}</p>
+      )}
+      <p className="text-xs text-faint mt-1.5">
+        {selected
+          ? `Images from “${selected.name}” will be added to the Brand Bible PDF as a reference grid.`
+          : 'Choose a mood board and its images will appear in the exported PDF.'}
+      </p>
+    </div>
   )
 }
 

@@ -17,9 +17,32 @@ function loadImage(url) {
   })
 }
 
+// Load an image and centre-crop it to a square JPEG data URL (for a tidy grid).
+function loadSquare(url, size) {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas')
+        c.width = size; c.height = size
+        const ctx = c.getContext('2d')
+        ctx.fillStyle = '#f0f0f0'; ctx.fillRect(0, 0, size, size)
+        const s = Math.min(img.naturalWidth, img.naturalHeight)
+        const sx = (img.naturalWidth - s) / 2, sy = (img.naturalHeight - s) / 2
+        ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size)
+        resolve(c.toDataURL('image/jpeg', 0.85))
+      } catch (e) { resolve(null) }
+    }
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
+}
+
 // Build & download a formatted Brand Bible PDF.
 // args: { bible, colors, manifestos, taglines, nameOf } where nameOf(userId) -> display name.
-export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [], taglines = [], nameOf = () => '' }) {
+export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [], taglines = [], referenceImages = [], nameOf = () => '' }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const PW = doc.internal.pageSize.getWidth()
@@ -157,8 +180,30 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
     if (typo.notes) { y += 4; para(typo.notes, { color: MUTED }) }
   }
 
+  // References + (optionally) the chosen mood board's images as an aligned grid.
+  if (sec('references') || referenceImages.length) {
+    heading('References & inspiration')
+    if (sec('references')) para(sec('references'))
+    if (referenceImages.length) {
+      const squares = (await Promise.all(referenceImages.map((u) => loadSquare(u, 420)))).filter(Boolean)
+      const cols = 3, gap = 10
+      const cellW = (CW - gap * (cols - 1)) / cols
+      const cellH = cellW
+      let i = 0
+      while (i < squares.length) {
+        ensure(cellH + gap)
+        const rowY = y
+        for (let c = 0; c < cols && i < squares.length; c++, i++) {
+          const x = M + c * (cellW + gap)
+          try { doc.addImage(squares[i], 'JPEG', x, rowY, cellW, cellH) } catch (e) {}
+        }
+        y = rowY + cellH + gap
+      }
+      y += 4
+    }
+  }
+
   const proseEnd = [
-    ['references', 'References & inspiration'],
     ['avoid', 'What we avoid'],
     ['sustainability', 'Sustainability & ethics'],
   ]
