@@ -152,7 +152,7 @@ export default function BrandBible() {
 
       <div className="space-y-5">
         {/* Logos — upload main logo, emblem, seal, wordmark… */}
-        <LogoSection logos={logos} arenaUrl={bible.logo_url} user={user} canEdit={canEdit} />
+        <LogoSection logos={logos} arenaUrl={bible.logo_url} user={user} canEdit={canEdit} onChange={load} />
 
         {/* Positioning + audience */}
         {['positioning', 'audience'].map((k) => {
@@ -220,29 +220,35 @@ export default function BrandBible() {
 const LOGO_LABELS = ['Main logo', 'Emblem', 'Seal / Crest', 'Monogram', 'Wordmark / Text logo', 'Icon', 'Other']
 
 // Upload & manage the brand's marks; these render in the exported PDF.
-function LogoSection({ logos, arenaUrl, user, canEdit }) {
+function LogoSection({ logos, arenaUrl, user, canEdit, onChange }) {
   const [label, setLabel] = useState(LOGO_LABELS[0])
   const [custom, setCustom] = useState('')
   const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState('')
   const fileRef = useRef()
 
   async function upload(file) {
     if (!file) return
-    setBusy(true)
+    setBusy(true); setDone('')
     try {
       const { url, path } = await uploadPublicImage('brand', file, 'logos')
       const finalLabel = (label === 'Other' ? custom.trim() : label) || 'Logo'
       const pos = (logos[logos.length - 1]?.position || 0) + 1
-      await supabase.from('bible_logos').insert({ label: finalLabel, url, storage_path: path, position: pos, created_by: user.id })
+      const { error } = await supabase.from('bible_logos').insert({ label: finalLabel, url, storage_path: path, position: pos, created_by: user.id })
+      if (error) throw error
       logActivity({ verb: 'added', entity_type: 'brand_bible', summary: `added a ${finalLabel} to the brand bible` })
       setCustom('')
-    } catch (e) { alert('Upload failed: ' + e.message) }
+      await onChange?.()                       // refresh immediately, don't wait on realtime
+      setDone(`${finalLabel} added ✓`)
+      setTimeout(() => setDone(''), 3000)
+    } catch (e) { alert('Upload failed: ' + (e.message || e)) }
     finally { setBusy(false) }
   }
   async function remove(l) {
     if (!confirm(`Remove "${l.label}"?`)) return
     if (l.storage_path) await supabase.storage.from('brand').remove([l.storage_path])
     await supabase.from('bible_logos').delete().eq('id', l.id)
+    await onChange?.()
   }
 
   const isEmpty = logos.length === 0 && !arenaUrl
@@ -291,7 +297,8 @@ function LogoSection({ logos, arenaUrl, user, canEdit }) {
           </button>
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; upload(f) }} />
-          <p className="text-xs text-faint basis-full">PNG with transparency works best. These appear in the exported PDF.</p>
+          {done && <span className="text-xs text-green-600 font-medium">{done}</span>}
+          <p className="text-xs text-faint basis-full">PNG with transparency works best. Logos save instantly — no “Save changes” needed. They appear in the exported PDF.</p>
         </div>
       )}
     </Section>
