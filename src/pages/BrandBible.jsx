@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { supabase, logActivity } from '../lib/supabase.js'
+import { supabase, logActivity, uploadPublicImage } from '../lib/supabase.js'
 import { useAuth } from '../lib/auth.jsx'
 import { Avatar, Spinner, PageHeader } from '../components/ui.jsx'
 import { Icon } from '../lib/icons.jsx'
@@ -25,6 +25,7 @@ export default function BrandBible() {
   const [colors, setColors] = useState([])
   const [entries, setEntries] = useState([])
   const [boards, setBoards] = useState([])
+  const [logos, setLogos] = useState([])
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const nameOf = (id) => profiles.find((p) => p.id === id)?.display_name || 'Someone'
@@ -47,13 +48,15 @@ export default function BrandBible() {
   const savedTypoRef = useRef(null)
 
   const load = useCallback(async () => {
-    const [b, c, e, bd] = await Promise.all([
+    const [b, c, e, bd, lg] = await Promise.all([
       supabase.from('brand_bible').select('*').eq('id', 1).single(),
       supabase.from('palette_colors').select('*').order('position').order('created_at'),
       supabase.from('bible_entries').select('*').order('position').order('created_at'),
       supabase.from('boards').select('id,name').order('created_at'),
+      supabase.from('bible_logos').select('*').order('position').order('created_at'),
     ])
     setBoards(bd.data || [])
+    setLogos(lg.data || [])
     if (b.data) {
       setBible(b.data)
 
@@ -87,6 +90,7 @@ export default function BrandBible() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'brand_bible' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'palette_colors' }, load)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bible_entries' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bible_logos' }, load)
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [load])
@@ -121,7 +125,9 @@ export default function BrandBible() {
       }
       await exportBiblePdf({
         bible: { ...(bible || {}), sections, typography },
-        colors, manifestos, taglines, referenceImages, nameOf,
+        colors, manifestos, taglines, referenceImages,
+        logos: logos.map((l) => ({ label: l.label, url: l.url })),
+        nameOf,
       })
     } finally { setExporting(false) }
   }
@@ -145,17 +151,8 @@ export default function BrandBible() {
         } />
 
       <div className="space-y-5">
-        {/* Logo (auto-set from the Logo Arena winner) */}
-        {bible.logo_url && (
-          <Section icon="trophy" title="Logo">
-            <div className="flex items-center gap-4">
-              <div className="h-24 w-24 rounded-xl border border-line bg-canvas grid place-items-center overflow-hidden shrink-0">
-                <img src={bible.logo_url} alt="Brand logo" className="max-h-24 max-w-full object-contain" />
-              </div>
-              <p className="text-sm text-muted">Chosen in the Logo Arena. Pick a different winner there and it updates here automatically.</p>
-            </div>
-          </Section>
-        )}
+        {/* Logos — upload main logo, emblem, seal, wordmark… */}
+        <LogoSection logos={logos} arenaUrl={bible.logo_url} user={user} canEdit={canEdit} />
 
         {/* Positioning + audience */}
         {['positioning', 'audience'].map((k) => {
@@ -217,6 +214,87 @@ export default function BrandBible() {
         </Section>
       </div>
     </div>
+  )
+}
+
+const LOGO_LABELS = ['Main logo', 'Emblem', 'Seal / Crest', 'Monogram', 'Wordmark / Text logo', 'Icon', 'Other']
+
+// Upload & manage the brand's marks; these render in the exported PDF.
+function LogoSection({ logos, arenaUrl, user, canEdit }) {
+  const [label, setLabel] = useState(LOGO_LABELS[0])
+  const [custom, setCustom] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fileRef = useRef()
+
+  async function upload(file) {
+    if (!file) return
+    setBusy(true)
+    try {
+      const { url, path } = await uploadPublicImage('brand', file, 'logos')
+      const finalLabel = (label === 'Other' ? custom.trim() : label) || 'Logo'
+      const pos = (logos[logos.length - 1]?.position || 0) + 1
+      await supabase.from('bible_logos').insert({ label: finalLabel, url, storage_path: path, position: pos, created_by: user.id })
+      logActivity({ verb: 'added', entity_type: 'brand_bible', summary: `added a ${finalLabel} to the brand bible` })
+      setCustom('')
+    } catch (e) { alert('Upload failed: ' + e.message) }
+    finally { setBusy(false) }
+  }
+  async function remove(l) {
+    if (!confirm(`Remove "${l.label}"?`)) return
+    if (l.storage_path) await supabase.storage.from('brand').remove([l.storage_path])
+    await supabase.from('bible_logos').delete().eq('id', l.id)
+  }
+
+  const isEmpty = logos.length === 0 && !arenaUrl
+
+  return (
+    <Section icon="brand" title="Logos">
+      {isEmpty && !canEdit && <p className="text-sm text-faint italic">No logos added yet.</p>}
+
+      {(logos.length > 0 || arenaUrl) && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          {logos.map((l) => (
+            <div key={l.id} className="group">
+              <div className="relative h-28 rounded-xl border border-line bg-canvas grid place-items-center overflow-hidden p-3">
+                <img src={l.url} alt={l.label} className="max-h-full max-w-full object-contain" />
+                {canEdit && (
+                  <button onClick={() => remove(l)} title="Remove"
+                    className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-black/55 text-white grid place-items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Icon name="close" size={13} />
+                  </button>
+                )}
+              </div>
+              <p className="text-xs font-medium text-muted mt-1.5 truncate">{l.label}</p>
+            </div>
+          ))}
+          {arenaUrl && (
+            <div>
+              <div className="h-28 rounded-xl border border-line bg-canvas grid place-items-center overflow-hidden p-3">
+                <img src={arenaUrl} alt="Logo Arena winner" className="max-h-full max-w-full object-contain" />
+              </div>
+              <p className="text-xs font-medium text-faint mt-1.5 truncate">Logo Arena winner</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select className="input h-9 text-sm w-auto" value={label} onChange={(e) => setLabel(e.target.value)}>
+            {LOGO_LABELS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+          {label === 'Other' && (
+            <input className="input h-9 text-sm w-40" placeholder="Label…" value={custom} onChange={(e) => setCustom(e.target.value)} />
+          )}
+          <button type="button" onClick={() => fileRef.current?.click()} className="btn btn-soft h-9" disabled={busy}>
+            <Icon name="upload" size={15} /> {busy ? 'Uploading…' : 'Upload logo'}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; upload(f) }} />
+          <p className="text-xs text-faint basis-full">PNG with transparency works best. These appear in the exported PDF.</p>
+        </div>
+      )}
+    </Section>
   )
 }
 

@@ -42,7 +42,7 @@ function loadSquare(url, size) {
 
 // Build & download a formatted Brand Bible PDF.
 // args: { bible, colors, manifestos, taglines, nameOf } where nameOf(userId) -> display name.
-export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [], taglines = [], referenceImages = [], nameOf = () => '' }) {
+export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [], taglines = [], referenceImages = [], logos = [], nameOf = () => '' }) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const PW = doc.internal.pageSize.getWidth()
@@ -109,16 +109,36 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   applyFont('body'); doc.setFontSize(10); doc.setTextColor(...MUTED)
   doc.text(clean(`Brand bible - exported ${new Date().toLocaleDateString()}`), M, y); y += 18
 
-  // ---- Logo ----
-  const logo = await loadImage(bible.logo_url)
-  if (logo) {
-    ensure(110)
-    const maxH = 90, maxW = 180
-    let w = logo.w, h = logo.h
-    const scale = Math.min(maxW / w, maxH / h, 1)
-    w *= scale; h *= scale
-    try { doc.addImage(logo.data, 'PNG', M, y, w, h) } catch (e) {}
-    y += h + 18
+  // ---- Logos ----
+  let logoList = logos.slice()
+  if (!logoList.length && bible.logo_url) logoList = [{ label: 'Logo', url: bible.logo_url }]
+  if (logoList.length) {
+    const items = (await Promise.all(logoList.map(async (l) => ({ label: l.label, img: await loadImage(l.url) })))).filter((x) => x.img)
+    if (items.length) {
+      heading('Logos')
+      const cols = items.length === 1 ? 1 : 2
+      const gap = 14
+      const cellW = (CW - gap * (cols - 1)) / cols
+      const boxH = 120
+      let i = 0
+      while (i < items.length) {
+        ensure(boxH + 26)
+        const rowY = y
+        for (let c = 0; c < cols && i < items.length; c++, i++) {
+          const it = items[i]
+          const x = M + c * (cellW + gap)
+          doc.setDrawColor(...LINE); doc.setFillColor(250, 250, 250)
+          doc.roundedRect(x, rowY, cellW, boxH, 6, 6, 'FD')
+          const pad = 16, availW = cellW - pad * 2, availH = boxH - pad * 2
+          let w = it.img.w, h = it.img.h
+          const sc = Math.min(availW / w, availH / h, 1); w *= sc; h *= sc
+          try { doc.addImage(it.img.data, 'PNG', x + (cellW - w) / 2, rowY + (boxH - h) / 2, w, h) } catch (e) {}
+          applyFont('body'); doc.setFontSize(9); doc.setTextColor(...MUTED)
+          doc.text(clean(it.label), x + 2, rowY + boxH + 13)
+        }
+        y = rowY + boxH + 26
+      }
+    }
   }
 
   const S = bible.sections || {}
