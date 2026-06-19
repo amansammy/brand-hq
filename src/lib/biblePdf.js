@@ -116,6 +116,7 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
     const items = (await Promise.all(logoList.map(async (l) => ({ label: l.label, img: await loadImage(l.url) })))).filter((x) => x.img)
     if (items.length) {
       heading('Logos')
+      para('Note: these logos are temporary placeholders and will be updated.', { size: 9, color: MUTED, font: 'italic', gap: 10 })
       const cols = items.length === 1 ? 1 : 2
       const gap = 14
       const cellW = (CW - gap * (cols - 1)) / cols
