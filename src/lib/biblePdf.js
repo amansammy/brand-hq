@@ -85,7 +85,7 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
     ensure(40)
     y += 8
     applyFont('heading'); doc.setFontSize(13); doc.setTextColor(...ACCENT)
-    doc.text(text.toUpperCase(), M, y)
+    doc.text(clean(text).toUpperCase(), M, y)
     y += 8
     doc.setDrawColor(...LINE); doc.setLineWidth(1)
     doc.line(M, y, M + CW, y)
@@ -94,7 +94,7 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   function para(text, { size = 11, color = INK, gap = 6, font = 'normal' } = {}) {
     if (!text) return
     applyFont(font); doc.setFontSize(size); doc.setTextColor(...color)
-    const lines = doc.splitTextToSize(String(text), CW)
+    const lines = doc.splitTextToSize(clean(String(text)), CW)
     for (const ln of lines) {
       ensure(size + 4)
       doc.text(ln, M, y)
@@ -107,7 +107,7 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
   applyFont('heading'); doc.setFontSize(32); doc.setTextColor(...INK)
   doc.text('Saint Monarch', M, y + 20); y += 36
   applyFont('body'); doc.setFontSize(10); doc.setTextColor(...MUTED)
-  doc.text(`Brand bible · exported ${new Date().toLocaleDateString()}`, M, y); y += 18
+  doc.text(clean(`Brand bible - exported ${new Date().toLocaleDateString()}`), M, y); y += 18
 
   // ---- Logo ----
   const logo = await loadImage(bible.logo_url)
@@ -164,9 +164,9 @@ export async function exportBiblePdf({ bible = {}, colors = [], manifestos = [],
         doc.setFillColor(...rgb); doc.setDrawColor(...LINE)
         doc.roundedRect(x, rowY, sw, sw, 6, 6, 'FD')
         applyFont('bold'); doc.setFontSize(8); doc.setTextColor(...INK)
-        doc.text(doc.splitTextToSize(c.name || c.hex, sw), x, rowY + sw + 12)
+        doc.text(doc.splitTextToSize(clean(c.name || c.hex), sw), x, rowY + sw + 12)
         applyFont('body'); doc.setTextColor(...MUTED)
-        doc.text(`${(c.hex || '').toUpperCase()}${c.code ? ' · ' + c.code : ''}`, x, rowY + sw + 22)
+        doc.text(clean(`${(c.hex || '').toUpperCase()}${c.code ? ' - ' + c.code : ''}`), x, rowY + sw + 22)
       }
       y = rowY + sw + 34
     }
@@ -251,6 +251,18 @@ async function registerFont(doc, family, weight) {
     doc.addFont(fname, internal, 'normal')
     return internal
   } catch (e) { _fontCache[key] = null; return null }
+}
+
+// Normalise smart punctuation & accents to plain glyphs the embedded fonts can render.
+function clean(s) {
+  return String(s)
+    .replace(/[‘’‚′‵]/g, "'")
+    .replace(/[“”„″]/g, '"')
+    .replace(/[–—−]/g, '-')
+    .replace(/…/g, '...')
+    .replace(/[•·●]/g, '-')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '') // strip diacritics
+    .replace(/[^\x20-\x7E\n]/g, '')                    // drop any other non-ASCII
 }
 
 function arrayBufferToBase64(buf) {
